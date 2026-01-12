@@ -132,3 +132,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Context knowledge graph files
+context_kg_*.html

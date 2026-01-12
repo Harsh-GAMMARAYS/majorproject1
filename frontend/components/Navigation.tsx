@@ -11,6 +11,7 @@ export default function Navigation() {
   const navItems = [
     { href: '/', label: 'Dashboard' },
     { href: '/query', label: 'Query' },
+    { href: '/graph', label: 'Knowledge Graph' },
     { href: '/generate/outline', label: 'Outline' },
     { href: '/generate/summarize', label: 'Summarize' },
     { href: '/generate/faq', label: 'FAQ' },

@@ -116,20 +116,23 @@ class MultiTurnAgent:
 
         # 4. Create a knowledge graph from the accumulated context
         graph_location = None
+        graph_data = None
         if create_graph and accumulated_context_chunks:
             full_context = "\n\n".join(accumulated_context_chunks)
             graph_filename = f"context_kg_{int(time.time())}_{uuid.uuid4().hex[:8]}.html"
-            # Return path relative to frontend API call (will be served via /graph/ endpoint)
-            graph_location = create_knowledge_graph_from_context(full_context, output_path=graph_filename)
-            if graph_location:
-                # Prepend /graph/ for the API endpoint
-                graph_location = f"/graph/{graph_location}"
+            # Get both HTML and JSON data
+            kg_result = create_knowledge_graph_from_context(full_context, output_path=graph_filename)
+            if kg_result and kg_result.get("html_location"):
+                # Prepend /graph/ for the API endpoint (HTML fallback)
+                graph_location = f"/graph/{kg_result['html_location']}"
+                # Include JSON data for frontend visualization
+                graph_data = kg_result.get("graph_data")
 
         return {
             "answer": final_answer,
             "context": accumulated_context_chunks,
             "sub_queries": sub_queries,
             "graph_location": graph_location,
+            "graph_data": graph_data,  # NEW: JSON data for vis.js
             "filenames": filenames,
-            
         }

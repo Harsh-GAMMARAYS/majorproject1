@@ -119,13 +119,15 @@ def build_and_save_graph():
 def build_and_save_graph_from_data(entities, relations, output_filename="assets/context_kg.html"):
     """
     Builds a graph from provided entities and relations and saves it to a specific HTML file.
+    Also returns the graph data as JSON for frontend visualization.
+    Returns: (html_path, json_data)
     """
     # output_dir = os.path.dirname(output_filename)
     # os.makedirs(output_dir, exist_ok=True)
 
     if not entities and not relations:
         print("❌ Error: No entities or relations provided. Cannot build graph.")
-        return
+        return None, None
 
     print(f"Building graph with {len(entities)} entities and {len(relations)} relations.")
 
@@ -136,6 +138,9 @@ def build_and_save_graph_from_data(entities, relations, output_filename="assets/
 
     print(f"✅ Graph built with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
 
+    # Extract JSON data for frontend
+    graph_json = extract_graph_data_as_json(G)
+
     try:
         print(f"\n--- Saving Interactive Graph Visualization (HTML) ---")
         nt = Network(height='800px', width='100%', directed=True, heading='Context Knowledge Graph')
@@ -143,8 +148,44 @@ def build_and_save_graph_from_data(entities, relations, output_filename="assets/
         nt.show_buttons(filter_=['physics'])
         nt.save_graph(output_filename)
         print(f"✅ Interactive graph saved to: {output_filename}")
+        return output_filename, graph_json
     except Exception as e:
         print(f"❌ Error saving HTML file: {e}")
+        return None, graph_json
+
+
+def extract_graph_data_as_json(G):
+    """
+    Extracts graph data from a NetworkX graph and returns it as JSON-serializable dict.
+    Format: {
+        "nodes": [{"id": "entity1", "label": "entity1"}, ...],
+        "edges": [{"from": "entity1", "to": "entity2", "label": "relation_type"}, ...]
+    }
+    """
+    nodes = []
+    edges = []
+    
+    # Extract nodes
+    for node in G.nodes():
+        nodes.append({
+            "id": str(node),
+            "label": str(node),
+            "title": str(node)  # vis.js uses title for hover text
+        })
+    
+    # Extract edges
+    for head, tail, data in G.edges(data=True):
+        edges.append({
+            "from": str(head),
+            "to": str(tail),
+            "label": str(data.get('label', '')),
+            "title": str(data.get('label', ''))  # vis.js uses title for hover text
+        })
+    
+    return {
+        "nodes": nodes,
+        "edges": edges
+    }
 
 
 # --- 4. Run the script ---

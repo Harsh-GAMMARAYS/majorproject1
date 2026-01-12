@@ -6,6 +6,7 @@ import {
   FiHelpCircle,
   FiSend,
   FiTrash2,
+  FiGitBranch,
 } from 'react-icons/fi';
 import { BsQuestionCircle } from 'react-icons/bs';
 import { HiOutlineDocumentText } from 'react-icons/hi';
@@ -146,6 +147,11 @@ export default function StudioGrid({ onToolSelect, activeTool }: StudioGridProps
       id: 'query',
       title: 'Query',
       icon: <FiHelpCircle className="w-6 h-6" />,
+    },
+    {
+      id: 'graph',
+      title: 'Knowledge Graph',
+      icon: <FiGitBranch className="w-6 h-6" />,
     },
   ];
 
