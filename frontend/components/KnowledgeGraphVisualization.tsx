@@ -21,11 +21,30 @@ export default function KnowledgeGraphVisualization({
   htmlFallbackUrl,
   title = 'Knowledge Graph Visualization',
 }: KnowledgeGraphVisualizationProps) {
+  const graphShellRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [useFallback, setUseFallback] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = useCallback(async () => {
+    const target = graphShellRef.current;
+    if (!target) {
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await target.requestFullscreen();
+      }
+    } catch {
+      setError('Fullscreen is not available in this browser context.');
+    }
+  }, []);
 
   const initializeGraph = useCallback(() => {
     if (!graphData || !containerRef.current) {
@@ -201,18 +220,44 @@ export default function KnowledgeGraphVisualization({
     };
   }, [initializeGraph]);
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const currentlyFullscreen = document.fullscreenElement === graphShellRef.current;
+      setIsFullscreen(currentlyFullscreen);
+      // Trigger a resize pass for vis canvas after layout change.
+      if (networkRef.current) {
+        window.setTimeout(() => {
+          networkRef.current?.redraw();
+          networkRef.current?.fit?.({ animation: true });
+        }, 80);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
   if (useFallback && htmlFallbackUrl) {
     return (
-      <div className="w-full">
+      <div ref={graphShellRef} className="w-full">
         <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 mb-4">
           <p className="text-yellow-300 text-sm">
             Using HTML visualization (fallback mode)
           </p>
         </div>
+        <div className="mb-3 flex items-center justify-end gap-2">
+          <button
+            onClick={toggleFullscreen}
+            className="rounded-lg border border-gray-700 bg-black/30 px-3 py-1.5 text-xs font-semibold text-gray-200 hover:text-white"
+          >
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </button>
+        </div>
         <div className="border border-gray-800 rounded-lg overflow-hidden bg-white">
           <iframe
             src={htmlFallbackUrl}
-            className="w-full h-96"
+            className="w-full"
+            style={{ height: isFullscreen ? 'calc(100vh - 160px)' : '24rem' }}
             title={title}
             sandbox="allow-same-origin allow-scripts"
             onError={(e) => {
@@ -258,22 +303,30 @@ export default function KnowledgeGraphVisualization({
   }
 
   return (
-    <div className="w-full space-y-3">
-      <div className="flex items-center justify-between">
+    <div ref={graphShellRef} className="w-full space-y-3">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="text-lg font-semibold text-white">{title}</h3>
-        {isLoading && (
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-emerald-400 rounded-full"></div>
-            Rendering graph...
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-emerald-400 rounded-full"></div>
+              Rendering graph...
+            </div>
+          )}
+          <button
+            onClick={toggleFullscreen}
+            className="rounded-lg border border-gray-700 bg-black/30 px-3 py-1.5 text-xs font-semibold text-gray-200 hover:text-white"
+          >
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </button>
+        </div>
       </div>
 
       <div
         ref={containerRef}
         className="w-full border border-gray-800 rounded-lg overflow-hidden bg-[#1a1a1a]"
         style={{
-          height: '600px',
+          height: isFullscreen ? 'calc(100vh - 160px)' : '600px',
           position: 'relative',
         }}
       />
@@ -286,7 +339,7 @@ export default function KnowledgeGraphVisualization({
             <span className="font-semibold">Edges:</span> {graphData.edges.length}
           </p>
           <p className="text-gray-500">
-            💡 Drag to move • Scroll to zoom • Double-click to expand
+            Drag to move • Scroll to zoom • Double-click to expand
           </p>
         </div>
       )}

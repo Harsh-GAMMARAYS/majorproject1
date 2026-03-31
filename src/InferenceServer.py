@@ -8,7 +8,10 @@ from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+try:
+    from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+except Exception:
+    JaegerExporter = None
 
 from src.inference.processor import FastProcessor, LargeProcessor
 
@@ -50,11 +53,14 @@ REQUEST_LATENCY = Histogram("inference_request_latency_seconds", "Latency of inf
 
 # ------------------- Tracing Setup -------------------
 trace.set_tracer_provider(TracerProvider())
-jaeger_exporter = JaegerExporter(
-    agent_host_name="localhost",  # change if running remotely
-    agent_port=6831,
-)
-trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(jaeger_exporter))
+if JaegerExporter is not None:
+    jaeger_exporter = JaegerExporter(
+        agent_host_name="localhost",  # change if running remotely
+        agent_port=6831,
+    )
+    trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(jaeger_exporter))
+else:
+    print("[TRACING] Jaeger exporter unavailable; continuing without Jaeger tracing.")
 tracer = trace.get_tracer(__name__)
 
 # ------------------- FastAPI Init -------------------

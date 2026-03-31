@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { deepQuery } from '@/lib/api';
 import type { DeepQueryResponse } from '@/types/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import BackButton from '@/components/BackButton';
 import KnowledgeGraphVisualization from '@/components/KnowledgeGraphVisualization';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
+import StudyPageShell from '@/components/StudyPageShell';
 
 export default function GraphPage() {
   const [queryText, setQueryText] = useState('');
@@ -43,19 +43,15 @@ export default function GraphPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <BackButton />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Knowledge Graph Explorer</h1>
-        <p className="text-gray-400">
-          Generate interactive knowledge graphs from your queries to explore entity relationships
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <StudyPageShell
+      eyebrow="Graph Exploration"
+      title="Knowledge Graph Explorer"
+      description="Generate interactive knowledge graphs from your queries and inspect the entities, relationships, and supporting context."
+    >
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Input Panel */}
         <div className="lg:col-span-1">
-          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 sticky top-8">
+          <div className="sticky top-24 rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Generate Graph</h2>
 
             <form onSubmit={handleGenerateGraph} className="space-y-4">
@@ -71,7 +67,7 @@ export default function GraphPage() {
                   value={queryText}
                   onChange={(e) => setQueryText(e.target.value)}
                   rows={6}
-                  className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-lg focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  className="w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-sm text-white focus:ring-emerald-500 focus:border-emerald-500"
                   placeholder="Enter your query to generate a knowledge graph..."
                 />
               </div>
@@ -93,7 +89,7 @@ export default function GraphPage() {
               <button
                 type="submit"
                 disabled={loading || !queryText.trim()}
-                className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
               >
                 {loading ? (
                   <>
@@ -116,7 +112,7 @@ export default function GraphPage() {
               <div className="mt-6 pt-6 border-t border-gray-700 space-y-3">
                 <div>
                   <h3 className="text-sm font-semibold text-white mb-2">Stats</h3>
-                  <div className="bg-gray-800 rounded p-3 space-y-1 text-xs text-gray-300">
+                  <div className="rounded-2xl border border-gray-700 bg-black/20 p-3 space-y-1 text-xs text-gray-300">
                     <p>
                       <span className="font-semibold">Nodes:</span>{' '}
                       {response.graph_data?.nodes.length || 0}
@@ -140,7 +136,7 @@ export default function GraphPage() {
         <div className="lg:col-span-3">
           {response && response.graph_data ? (
             <div className="space-y-6">
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+              <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6">
                 <KnowledgeGraphVisualization
                   graphData={response.graph_data}
                   htmlFallbackUrl={
@@ -153,7 +149,7 @@ export default function GraphPage() {
               </div>
 
               {/* Sub-queries and Answer */}
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
+              <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6 space-y-4">
                 {response.sub_queries.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-white mb-2">Sub-Queries</h3>
@@ -161,7 +157,7 @@ export default function GraphPage() {
                       {response.sub_queries.map((subQuery, index) => (
                         <li
                           key={index}
-                          className="text-sm text-gray-300 bg-gray-800 p-2 rounded border border-gray-700"
+                          className="rounded-2xl border border-gray-700 bg-black/20 p-2 text-sm text-gray-300"
                         >
                           {index + 1}. {subQuery}
                         </li>
@@ -186,7 +182,7 @@ export default function GraphPage() {
                       {response.context.map((chunk, index) => (
                         <div
                           key={index}
-                          className="text-xs text-gray-400 bg-gray-800 p-2 rounded border border-gray-700 italic"
+                          className="rounded-2xl border border-gray-700 bg-black/20 p-2 text-xs italic text-gray-400"
                         >
                           {chunk.substring(0, 150)}...
                         </div>
@@ -197,7 +193,7 @@ export default function GraphPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center">
+            <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-12 text-center">
               <div className="text-gray-400 space-y-4">
                 <div className="text-4xl">📊</div>
                 <p>Enter a query and click "Generate Graph" to explore entity relationships</p>
@@ -206,6 +202,6 @@ export default function GraphPage() {
           )}
         </div>
       </div>
-    </div>
+    </StudyPageShell>
   );
 }

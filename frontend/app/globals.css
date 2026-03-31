@@ -21,6 +21,41 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+/* Hide visible browser scrollbars globally while retaining scroll behavior. */
+html,
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* vis.js control readability improvements */
+div.vis-network div.vis-navigation {
+  bottom: 12px !important;
+  left: 12px !important;
+  right: 12px !important;
+}
+
+div.vis-network div.vis-navigation div.vis-button {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 9999px !important;
+  border: 1px solid rgba(16, 185, 129, 0.85) !important;
+  background-color: rgba(229, 231, 235, 0.95) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35) !important;
+  opacity: 1 !important;
+}
+
+div.vis-network div.vis-navigation div.vis-button:hover {
+  background-color: rgba(209, 250, 229, 0.98) !important;
+}
+
 /* Flashcard flip animation */
 .perspective-1000 {
   perspective: 1000px;

@@ -68,6 +68,37 @@ ngrok config add-authtoken "NGROK-TOKEN"
 
 
 
+### POSTGRES FOR STUDY ROOMS
+
+The room backend now uses PostgreSQL via `DATABASE_URL`.
+
+1. copy the env template values you need from `.env.example`
+2. start Postgres:
+
+```bash
+docker compose up -d postgres
+```
+
+3. if you are using the local project venv, install deps there:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Default room database URL:
+
+```bash
+postgresql://postgres:postgres@localhost:5432/majorproject1
+```
+
+Live study-room updates are available over:
+
+```bash
+ws://localhost:5000/rooms/{room_id}/ws?user_id={user_id}
+```
+
+
 
 ### TO RUN
 
@@ -125,5 +156,4 @@ memory -- vector + grapg + episodic , pruning... memory policy ,  context chaini
 
 
 https://chatgpt.com/c/68ec1ba2-7728-8323-be9e-6e52f2245aaa
-
 

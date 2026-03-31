@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getFileStatus, deleteFiles } from '@/lib/api';
 import type { FileStatusResponse } from '@/types/api';
+import { useAuth } from './AuthProvider';
 import StatusBadge from './StatusBadge';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorAlert from './ErrorAlert';
@@ -20,33 +21,23 @@ interface Folder {
 interface FileSystemProps {
   autoRefresh?: boolean;
   refreshInterval?: number;
+  fileStatus?: FileStatusResponse;
+  onRefresh?: () => Promise<void>;
 }
 
 export default function FileSystem({
   autoRefresh = true,
   refreshInterval = 5000,
+  fileStatus: controlledFileStatus,
+  onRefresh,
 }: FileSystemProps) {
-  const [fileStatus, setFileStatus] = useState<FileStatusResponse>({});
+  const { user } = useAuth();
+  const storageKey = user ? `fileSystemFolders_${user.id}` : null;
+
+  const [internalFileStatus, setInternalFileStatus] = useState<FileStatusResponse>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [folders, setFolders] = useState<Folder[]>(() => {
-    // Initialize with a "Pre-uploaded Files" folder
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fileSystemFolders');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    }
-    return [
-      {
-        id: 'pre-uploaded',
-        name: 'Pre-uploaded Files',
-        files: [],
-        parentId: null,
-        expanded: true,
-      },
-    ];
-  });
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
@@ -56,28 +47,56 @@ export default function FileSystem({
   const [showAddFilesModal, setShowAddFilesModal] = useState<string | null>(null);
   const [filesToAdd, setFilesToAdd] = useState<Set<string>>(new Set());
 
+  const fileStatus = controlledFileStatus ?? internalFileStatus;
+
+  const saveFolders = useCallback((foldersToSave: Folder[]) => {
+    if (typeof window !== 'undefined' && storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(foldersToSave));
+    }
+  }, [storageKey]);
+
+  const reconcileFoldersAndSelection = useCallback((status: FileStatusResponse) => {
+    const availableFiles = new Set(Object.keys(status));
+
+    setFolders((prev) => {
+      const pruned = prev.map((folder) => ({
+        ...folder,
+        files: folder.files.filter((file) => availableFiles.has(file)),
+      }));
+
+      const allFiles = Object.keys(status);
+      const filesInFolders = pruned.flatMap((folder) => folder.files);
+      const orphanedFiles = allFiles.filter((file) => !filesInFolders.includes(file));
+
+      const updated = orphanedFiles.length > 0
+        ? [
+            ...pruned.filter((f) => f.id !== 'uncategorized'),
+            {
+              id: 'uncategorized',
+              name: 'My Uploads',
+              files: orphanedFiles,
+              parentId: null,
+              expanded: true,
+            },
+          ]
+        : pruned.filter((f) => f.id !== 'uncategorized');
+
+      saveFolders(updated);
+      return updated;
+    });
+
+    setSelectedFiles((prev) => {
+      const next = new Set(Array.from(prev).filter((file) => availableFiles.has(file)));
+      return next;
+    });
+  }, [saveFolders]);
+
   const fetchFileStatus = async () => {
     try {
       setError(null);
       const status = await getFileStatus();
-      setFileStatus(status);
-      
-      // Move files that aren't in any folder to "Pre-uploaded Files"
-      const allFiles = Object.keys(status);
-      const filesInFolders = folders.flatMap(f => f.files);
-      const orphanedFiles = allFiles.filter(f => !filesInFolders.includes(f));
-      
-      if (orphanedFiles.length > 0) {
-        setFolders(prev => {
-          const updated = prev.map(f => 
-            f.id === 'pre-uploaded' 
-              ? { ...f, files: [...new Set([...f.files, ...orphanedFiles])] }
-              : f
-          );
-          saveFolders(updated);
-          return updated;
-        });
-      }
+      setInternalFileStatus(status);
+      reconcileFoldersAndSelection(status);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch file status');
     } finally {
@@ -85,23 +104,56 @@ export default function FileSystem({
     }
   };
 
-  const saveFolders = (foldersToSave: Folder[]) => {
+  // Remove legacy global localStorage key from demo version
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('fileSystemFolders', JSON.stringify(foldersToSave));
+      localStorage.removeItem('fileSystemFolders');
     }
-  };
+  }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (!storageKey) {
+      setFolders([]);
+      setSelectedFiles(new Set());
+      return;
+    }
+
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) {
+      setFolders([]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as Folder[];
+      setFolders(parsed);
+    } catch {
+      localStorage.removeItem(storageKey);
+      setFolders([]);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (controlledFileStatus) {
+      setLoading(false);
+      reconcileFoldersAndSelection(controlledFileStatus);
+      return;
+    }
+
     fetchFileStatus();
     if (autoRefresh) {
       const interval = setInterval(fetchFileStatus, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [autoRefresh, refreshInterval]);
+  }, [autoRefresh, refreshInterval, controlledFileStatus, reconcileFoldersAndSelection]);
 
   useEffect(() => {
     saveFolders(folders);
-  }, [folders]);
+  }, [folders, saveFolders]);
 
   const handleCreateFolder = () => {
     if (!newFolderName.trim()) return;
@@ -123,10 +175,10 @@ export default function FileSystem({
     const folder = folders.find(f => f.id === folderId);
     if (!folder) return;
 
-    // Move files to "Pre-uploaded Files" before deleting
+    // Move files back to uncategorized before deleting folder
     if (folder.files.length > 0) {
       setFolders(prev => prev.map(f => 
-        f.id === 'pre-uploaded'
+        f.id === 'uncategorized'
           ? { ...f, files: [...f.files, ...folder.files] }
           : f
       ));
@@ -239,7 +291,11 @@ export default function FileSystem({
 
       setSelectedFiles(new Set());
       setShowDeleteModal(false);
-      await fetchFileStatus();
+      if (onRefresh) {
+        await onRefresh();
+      } else {
+        await fetchFileStatus();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete files');
     }
@@ -257,7 +313,7 @@ export default function FileSystem({
     );
   }
 
-  const allFilesInFolders = folders.flatMap(f => f.files);
+  const allFilesInFolders = folders.flatMap(f => f.files.filter(file => fileStatus[file]));
   const orphanedFiles = Object.keys(fileStatus).filter(f => !allFilesInFolders.includes(f));
 
   return (
@@ -268,7 +324,7 @@ export default function FileSystem({
       <div className="flex items-center justify-between">
         <button
           onClick={() => setShowNewFolderModal(true)}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+          className="flex items-center gap-2 rounded-2xl border border-gray-700 bg-black/20 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-white/[0.03]"
         >
           <HiPlus className="w-4 h-4" />
           New Folder
@@ -276,7 +332,7 @@ export default function FileSystem({
         {selectedFiles.size > 0 && (
           <button
             onClick={() => setShowDeleteModal(true)}
-            className="px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            className="rounded-2xl bg-red-600 px-3 py-2 text-sm text-white transition-colors hover:bg-red-700"
           >
             Delete ({selectedFiles.size})
           </button>
@@ -285,11 +341,19 @@ export default function FileSystem({
 
       {/* Folder Tree */}
       <div className="space-y-1">
-        {folders.map((folder) => (
+        {folders.map((folder) => {
+          const visibleFiles = folder.files.filter(filename => Boolean(fileStatus[filename]));
+          const isDefaultFolder = folder.id === 'uncategorized';
+
+          if (visibleFiles.length === 0) {
+            return null;
+          }
+
+          return (
           <div key={folder.id} className="relative">
             {/* Folder Header */}
             <div
-              className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-800 transition-colors group"
+              className="group flex items-center gap-2 rounded-2xl p-2 transition-colors hover:bg-white/[0.03]"
               onDragOver={(e) => handleDragOver(e, folder.id)}
               onDrop={(e) => handleDrop(e, folder.id)}
             >
@@ -309,7 +373,7 @@ export default function FileSystem({
                 <HiFolder className="w-5 h-5 text-gray-500" />
               )}
               <span className="flex-1 text-sm font-medium text-gray-300">{folder.name}</span>
-              <span className="text-xs text-gray-500">({folder.files.length})</span>
+              <span className="text-xs text-gray-500">({visibleFiles.length})</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -321,7 +385,7 @@ export default function FileSystem({
               >
                 <HiPlus className="w-4 h-4" />
               </button>
-              {folder.id !== 'pre-uploaded' && (
+              {!isDefaultFolder && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -335,7 +399,7 @@ export default function FileSystem({
             </div>
 
             {/* Folder Menu */}
-            {showFolderMenu === folder.id && folder.id !== 'pre-uploaded' && (
+            {showFolderMenu === folder.id && !isDefaultFolder && (
               <div className="absolute left-8 top-8 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10 p-2">
                 <button
                   onClick={() => {
@@ -351,10 +415,10 @@ export default function FileSystem({
             {/* Folder Files */}
             {folder.expanded && (
               <div className="ml-8 mt-1 space-y-1">
-                {folder.files.length === 0 ? (
+                {visibleFiles.length === 0 ? (
                   <div className="text-xs text-gray-500 p-2">No files</div>
                 ) : (
-                  folder.files.map((filename) => {
+                  visibleFiles.map((filename) => {
                     const status = getFileStatusItem(filename);
                     
                     return (
@@ -362,7 +426,7 @@ export default function FileSystem({
                         key={filename}
                         draggable
                         onDragStart={() => handleDragStart(filename)}
-                        className="flex items-center gap-2 p-2 rounded hover:bg-gray-800 transition-colors cursor-move"
+                        className="flex cursor-move items-center gap-2 rounded-xl p-2 transition-colors hover:bg-white/[0.03]"
                       >
                         <input
                           type="checkbox"
@@ -387,7 +451,7 @@ export default function FileSystem({
               </div>
             )}
           </div>
-        ))}
+        )})}
 
         {/* Orphaned Files (not in any folder) */}
         {orphanedFiles.length > 0 && (
@@ -401,7 +465,7 @@ export default function FileSystem({
                   key={filename}
                   draggable
                   onDragStart={() => handleDragStart(filename)}
-                  className="flex items-center gap-2 p-2 rounded hover:bg-gray-800 transition-colors cursor-move"
+                className="flex cursor-move items-center gap-2 rounded-xl p-2 transition-colors hover:bg-white/[0.03]"
                 >
                   <input
                     type="checkbox"
@@ -562,4 +626,3 @@ export default function FileSystem({
     </div>
   );
 }
-

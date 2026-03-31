@@ -6,7 +6,7 @@ import type { FlashcardResponse } from '@/types/api';
 import FileSelector from '@/components/FileSelector';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import BackButton from '@/components/BackButton';
+import StudyPageShell from '@/components/StudyPageShell';
 
 export default function FlashcardsPage() {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -87,15 +87,13 @@ export default function FlashcardsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <BackButton />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Generate Flashcards</h1>
-        <p className="text-gray-400">Create flashcards from your documents for studying</p>
-      </div>
-
+    <StudyPageShell
+      eyebrow="Study Material"
+      title="Generate Flashcards"
+      description="Create revision cards from your documents in the same shared visual language as study rooms."
+    >
       {!flashcards ? (
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-6">
+          <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6 space-y-6">
           <FileSelector
             selectedFiles={selectedFiles}
             onSelectionChange={setSelectedFiles}
@@ -105,7 +103,7 @@ export default function FlashcardsPage() {
           <button
             onClick={handleGenerate}
             disabled={loading || selectedFiles.length === 0}
-            className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+            className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
           >
             {loading ? (
               <>
@@ -118,9 +116,9 @@ export default function FlashcardsPage() {
           </button>
 
           {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
-        </div>
-      ) : (
-        <div className="space-y-6">
+          </div>
+        ) : (
+          <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold text-white">
               Card {currentIndex + 1} of {flashcards.flashcards.length}
@@ -188,8 +186,8 @@ export default function FlashcardsPage() {
           >
             Generate New Flashcards
           </button>
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+    </StudyPageShell>
   );
 }

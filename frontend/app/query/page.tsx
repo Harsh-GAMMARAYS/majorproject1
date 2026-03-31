@@ -5,9 +5,9 @@ import { query, deepQuery } from '@/lib/api';
 import type { QueryResponse, DeepQueryResponse } from '@/types/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import BackButton from '@/components/BackButton';
 import KnowledgeGraphVisualization from '@/components/KnowledgeGraphVisualization';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
+import StudyPageShell from '@/components/StudyPageShell';
 
 export default function QueryPage() {
   const [activeTab, setActiveTab] = useState<'simple' | 'deep'>('simple');
@@ -19,7 +19,6 @@ export default function QueryPage() {
   const [simpleResponse, setSimpleResponse] = useState<QueryResponse | null>(null);
   const [deepResponse, setDeepResponse] = useState<DeepQueryResponse | null>(null);
   const [showGraph, setShowGraph] = useState(false);
-
 
   const handleSimpleQuery = async () => {
     if (!queryText.trim()) {
@@ -40,7 +39,6 @@ export default function QueryPage() {
       setLoading(false);
     }
   };
-
   const handleDeepQuery = async () => {
     if (!queryText.trim()) {
       setError('Please enter a query');
@@ -91,19 +89,15 @@ export default function QueryPage() {
 
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <BackButton />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Query Knowledge Base</h1>
-        <p className="text-gray-400">
-          Ask questions and get answers from your uploaded documents
-        </p>
-      </div>
-
-      <div className="bg-gray-900 border border-gray-800 rounded-lg shadow">
+    <StudyPageShell
+      eyebrow="Interactive Retrieval"
+      title="Query Knowledge Base"
+      description="Ask direct questions, run deeper reasoning, and inspect the supporting context from your uploaded documents."
+    >
+      <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
         {/* Tabs */}
-        <div className="border-b border-gray-800">
-          <nav className="flex -mb-px">
+        <div className="border-b border-gray-800 px-6 py-5">
+          <nav className="flex gap-2">
             <button
               onClick={() => {
                 setActiveTab('simple');
@@ -111,10 +105,10 @@ export default function QueryPage() {
                 setSimpleResponse(null);
                 setDeepResponse(null);
               }}
-              className={`py-4 px-6 border-b-2 font-medium text-sm ${
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'simple'
-                  ? 'border-emerald-400 text-white'
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                  ? 'bg-emerald-500/12 text-emerald-300'
+                  : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
               }`}
             >
               Simple Query
@@ -126,10 +120,10 @@ export default function QueryPage() {
                 setSimpleResponse(null);
                 setDeepResponse(null);
               }}
-              className={`py-4 px-6 border-b-2 font-medium text-sm ${
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'deep'
-                  ? 'border-emerald-400 text-white'
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                  ? 'bg-emerald-500/12 text-emerald-300'
+                  : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
               }`}
             >
               Deep Query
@@ -151,7 +145,7 @@ export default function QueryPage() {
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-white focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="Enter your question here..."
               />
             </div>
@@ -165,7 +159,7 @@ export default function QueryPage() {
                   max="20"
                   value={topK}
                   onChange={(e) => setTopK(parseInt(e.target.value) || 5)}
-                  className="w-20 px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-lg"
+                  className="w-24 rounded-xl border border-gray-700 bg-black/20 px-3 py-2 text-white"
                 />
               </label>
 
@@ -185,7 +179,7 @@ export default function QueryPage() {
             <button
               type="submit"
               disabled={loading}
-                className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
             >
               {loading ? (
                 <>
@@ -205,7 +199,7 @@ export default function QueryPage() {
             <div className="mt-6 space-y-4">
               <div className="border-t border-gray-800 pt-6">
                 <h3 className="text-lg font-semibold text-white mb-2">Answer</h3>
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 text-gray-200">
+                <div className="rounded-2xl border border-gray-700 bg-black/20 p-4 text-gray-200">
                   <MarkdownRenderer content={simpleResponse.answer} />
                 </div>
               </div>
@@ -219,7 +213,7 @@ export default function QueryPage() {
                     {simpleResponse.context.map((chunk, index) => (
                       <div
                         key={index}
-                        className="bg-gray-800 rounded-lg p-4 border border-gray-700"
+                        className="rounded-2xl border border-gray-700 bg-black/20 p-4"
                       >
                         <p className="text-sm text-gray-200 whitespace-pre-wrap">{chunk}</p>
                       </div>
@@ -248,7 +242,7 @@ export default function QueryPage() {
 
               <div className="border-t border-gray-800 pt-6">
                 <h3 className="text-lg font-semibold text-white mb-2">Answer</h3>
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 text-gray-200">
+                <div className="rounded-2xl border border-gray-700 bg-black/20 p-4 text-gray-200">
                   <MarkdownRenderer content={deepResponse.answer} />
                 </div>
               </div>
@@ -262,7 +256,7 @@ export default function QueryPage() {
                     {deepResponse.context.map((chunk, index) => (
                       <div
                         key={index}
-                        className="bg-gray-800 rounded-lg p-4 border border-gray-700"
+                        className="rounded-2xl border border-gray-700 bg-black/20 p-4"
                       >
                         <p className="text-sm text-gray-200 whitespace-pre-wrap">{chunk}</p>
                       </div>
@@ -287,7 +281,6 @@ export default function QueryPage() {
           )}
         </div>
       </div>
-    </div>
+    </StudyPageShell>
   );
 }
-

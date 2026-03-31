@@ -1,12 +1,13 @@
 import os
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import httpx
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Body
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Body, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel, Field, ValidationError
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import uvicorn
 import json
 
@@ -16,16 +17,29 @@ import sys
 sys.path.append(str(project_root))
 
 from src.DataCollectionPipe import run_pipe
+from src.auth.service import AuthService
 from src.retrieverPipeline import load_logs, load_vector_store, retrieve_chunks
 from src.knowledgeGraphPipeline import createDatabaseKnowledgeGraph
-from src.promptAgent import MultiTurnAgent
 from src.database import delete_files_from_db
 from src.generative.engine import run_summarization, run_outline_generation, run_faq_generation, run_quiz_generation, run_flashcards_generation
+from src.rooms.realtime import RoomConnectionManager
+from src.rooms.service import RoomService
+from src.rooms.store import RoomStore
+from src.services.query_service import execute_deep_query, execute_query
 
 # --- Configuration ---
 # Directories
 UPLOAD_DIR = project_root / "uploaded"
 DATA_WAREHOUSE_DIR = project_root / "database" / "data_warehouse"
+ROOMS_DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@localhost:5432/majorproject1",
+)
+JWT_SECRET = os.getenv("JWT_SECRET", "change-this-in-local-env")
+ACCESS_TOKEN_TTL_SECONDS = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "900"))
+REFRESH_TOKEN_TTL_DAYS = int(os.getenv("JWT_REFRESH_TTL_DAYS", "14"))
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@yopmail.com")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Test@2219")
 
 # Server
 INFERENCE_SERVER_URL = "http://127.0.0.1:8000/infer"
@@ -75,6 +89,11 @@ app.state.chunk_traces = None
 app.state.index = None
 app.state.ids = None
 app.state.store_type = 'hnsw'  # or 'faiss'
+app.state.room_store = None
+app.state.room_service = None
+app.state.room_hub = None
+app.state.auth_service = None
+bearer_scheme = HTTPBearer(auto_error=False)
 
 # --- Pydantic Models ---
 class QueryRequest(BaseModel):
@@ -188,6 +207,124 @@ class OutlineRequest(BaseModel):
     )
 
 
+class AuthRegisterRequest(BaseModel):
+    email: str = Field(..., description="Email address for the account.")
+    display_name: str = Field(..., description="Display name for the user.")
+    password: str = Field(..., description="Password for the account.")
+
+
+class AuthLoginRequest(BaseModel):
+    email: str = Field(..., description="Email address for the account.")
+    password: str = Field(..., description="Password for the account.")
+
+
+class AuthRefreshRequest(BaseModel):
+    refresh_token: str = Field(..., description="Refresh token returned during login.")
+
+
+class AuthLogoutRequest(BaseModel):
+    refresh_token: str = Field(..., description="Refresh token to revoke.")
+
+
+class RoomCreateRequest(BaseModel):
+    name: str = Field(..., description="Study room name.")
+    max_members: int = Field(5, description="Maximum members allowed in the room.")
+    password: str = Field(
+        ...,
+        description="Room password used for protected joins.",
+    )
+
+
+class RoomJoinRequest(BaseModel):
+    password: Optional[str] = Field(None, description="Room password, if required.")
+
+
+class RoomUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, description="Updated room name.")
+    max_members: Optional[int] = Field(None, description="Updated room size.")
+    password: Optional[str] = Field(
+        None,
+        description="Set or update room password. Empty value removes password when clear_password is true.",
+    )
+    clear_password: bool = Field(False, description="Remove room password protection.")
+
+
+class RoomInviteRequest(BaseModel):
+    username: str = Field(..., description="Unique username (display name) to invite.")
+
+
+class RoomInviteRespondRequest(BaseModel):
+    accept: bool = Field(..., description="Whether to accept or decline the invite.")
+
+
+class RoomKickRequest(BaseModel):
+    user_id: str = Field(..., description="User id to remove from the room.")
+
+
+class RoomMessageRequest(BaseModel):
+    content: str = Field(..., description="Message body.")
+    message_type: str = Field("chat", description="Message type.")
+
+
+class RoomContextFilesRequest(BaseModel):
+    filenames: List[str] = Field(..., description="Processed files to share in the room.")
+
+
+class RoomContextRemoveRequest(BaseModel):
+    filename: str = Field(..., description="Single file to remove from room context.")
+
+
+class RoomActionRequest(BaseModel):
+    filenames: Optional[List[str]] = Field(
+        None,
+        description="Files to use for the action. Defaults to the room's shared context files.",
+    )
+    combine: bool = Field(False, description="Whether to combine outlines.")
+    question_type: str = Field("mcq", description="Quiz question type.")
+    count: int = Field(10, description="Number of quiz questions.")
+
+
+class RoomQueryRequest(BaseModel):
+    query: str = Field(..., description="The query to run in the study room.")
+    top_k: int = Field(5, description="Number of context chunks to retrieve.")
+
+
+class RoomDeepQueryRequest(RoomQueryRequest):
+    create_graph: bool = Field(
+        False,
+        description="Whether the room deep query should generate a knowledge graph.",
+    )
+
+
+class RoomPresenceStateUpdateRequest(BaseModel):
+    in_call: Optional[bool] = Field(None, description="Whether the member is currently in a call.")
+    screen_sharing: Optional[bool] = Field(
+        None,
+        description="Whether the member is currently sharing their screen.",
+    )
+    video_enabled: Optional[bool] = Field(None, description="Whether camera is enabled.")
+    audio_enabled: Optional[bool] = Field(None, description="Whether microphone is enabled.")
+
+
+class RoomCanvasSnapshotRequest(BaseModel):
+    board: Dict[str, Any] = Field(
+        ...,
+        description="Serialized collaborative canvas payload.",
+    )
+    title: Optional[str] = Field(None, description="Optional title for the saved snapshot.")
+
+
+class AdminUserUpdateRequest(BaseModel):
+    display_name: Optional[str] = Field(None, description="Updated display name.")
+    email: Optional[str] = Field(None, description="Updated email address.")
+    is_active: Optional[bool] = Field(None, description="Whether the user is active.")
+
+
+class AdminRoomUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, description="Updated room name.")
+    max_members: Optional[int] = Field(None, description="Updated room size.")
+
+
 # --- Background Tasks ---
 def run_data_pipeline():
     """
@@ -220,6 +357,20 @@ def startup_event():
     """
     print("Server starting up...")
     load_retriever_assets()
+    app.state.room_store = RoomStore(ROOMS_DATABASE_URL)
+    app.state.room_service = RoomService(app.state.room_store)
+    app.state.room_hub = RoomConnectionManager()
+    app.state.auth_service = AuthService(
+        app.state.room_store,
+        jwt_secret=JWT_SECRET,
+        access_ttl_seconds=ACCESS_TOKEN_TTL_SECONDS,
+        refresh_ttl_days=REFRESH_TOKEN_TTL_DAYS,
+    )
+    app.state.room_store.ensure_admin_account(
+        email=ADMIN_EMAIL,
+        password=ADMIN_PASSWORD,
+        display_name="Admin",
+    )
 
 def load_retriever_assets():
     """
@@ -233,6 +384,98 @@ def load_retriever_assets():
         print("⚠️ Warning: Log files or vector store not found. Please upload files to build them.")
     except Exception as e:
         print(f"An unexpected error occurred while loading retriever assets: {e}")
+
+
+def get_room_service() -> RoomService:
+    if app.state.room_service is None:
+        app.state.room_store = RoomStore(ROOMS_DATABASE_URL)
+        app.state.room_store.ensure_admin_account(
+            email=ADMIN_EMAIL,
+            password=ADMIN_PASSWORD,
+            display_name="Admin",
+        )
+        app.state.room_service = RoomService(app.state.room_store)
+    return app.state.room_service
+
+
+def get_auth_service() -> AuthService:
+    if app.state.auth_service is None:
+        if app.state.room_store is None:
+            app.state.room_store = RoomStore(ROOMS_DATABASE_URL)
+        app.state.room_store.ensure_admin_account(
+            email=ADMIN_EMAIL,
+            password=ADMIN_PASSWORD,
+            display_name="Admin",
+        )
+        app.state.auth_service = AuthService(
+            app.state.room_store,
+            jwt_secret=JWT_SECRET,
+            access_ttl_seconds=ACCESS_TOKEN_TTL_SECONDS,
+            refresh_ttl_days=REFRESH_TOKEN_TTL_DAYS,
+        )
+    return app.state.auth_service
+
+
+def get_room_hub() -> RoomConnectionManager:
+    if app.state.room_hub is None:
+        app.state.room_hub = RoomConnectionManager()
+    return app.state.room_hub
+
+
+def resolve_client_ip(request: Request) -> Optional[str]:
+    return request.client.host if request.client else None
+
+
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Dict[str, Any]:
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        current_user = get_auth_service().get_current_user(credentials.credentials)
+        if app.state.room_store is not None:
+            app.state.room_store.touch_user_activity(current_user["id"])
+        return current_user
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+
+def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+    if not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return current_user
+
+
+def get_owned_file_status(user_id: str) -> Dict[str, Any]:
+    file_status_path = project_root / "database" / "logs" / "file_status.json"
+    if not file_status_path.exists():
+        return {}
+
+    with open(file_status_path, "r", encoding="utf-8") as handle:
+        try:
+            raw_status = json.load(handle)
+        except json.JSONDecodeError:
+            return {}
+
+    if app.state.room_store is None:
+        app.state.room_store = RoomStore(ROOMS_DATABASE_URL)
+
+    owned_filenames = set(app.state.room_store.list_uploaded_filenames_for_user(user_id))
+    return {
+        filename: details
+        for filename, details in raw_status.items()
+        if filename in owned_filenames and details.get("deleted") is not True
+    }
+
+
+def get_owned_processed_filenames(user_id: str) -> List[str]:
+    room_service = get_room_service()
+    return room_service.get_owned_processed_files(user_id)
+
+
+def validate_owned_processed_filenames(user_id: str, filenames: List[str]) -> List[str]:
+    room_service = get_room_service()
+    return room_service.validate_context_files(user_id, filenames)
 
 # --- API Endpoints ---
 @app.get(
@@ -255,16 +498,19 @@ def load_retriever_assets():
         404: {"description": "File status log not found. No files have been processed yet."}
     }
 )
-async def get_file_status():
+async def get_file_status(current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Returns the status of processed files from the file_status.json log.
     """
-    file_status_path = project_root / "database" / "logs" / "file_status.json"
-    if not file_status_path.exists():
-        raise HTTPException(status_code=404, detail="File status log not found.")
-    
-    # Return the file as a JSON response
-    return FileResponse(path=file_status_path, media_type='application/json')
+    filtered_status = get_owned_file_status(current_user["id"])
+    return JSONResponse(
+        content=filtered_status,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 @app.post(
     "/upload",
@@ -291,7 +537,8 @@ async def get_file_status():
 )
 async def upload_files(
     background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(..., description="Multiple files to upload (e.g., PDF, TXT).")
+    files: List[UploadFile] = File(..., description="Multiple files to upload (e.g., PDF, TXT)."),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Handles file uploads, saves them to a temporary directory, and triggers the 
@@ -310,6 +557,15 @@ async def upload_files(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         saved_files.append(file.filename)
+
+    try:
+        get_room_service().store.register_uploaded_files(current_user["id"], saved_files)
+    except ValueError as exc:
+        for filename in saved_files:
+            file_path = UPLOAD_DIR / filename
+            if file_path.exists():
+                file_path.unlink()
+        raise HTTPException(status_code=400, detail=str(exc))
 
     # Run the pipeline in the background
     background_tasks.add_task(run_data_pipeline)
@@ -356,7 +612,8 @@ async def query_knowledge_base(
             "query": "What is the impact of climate change on marine ecosystems?",
             "top_k": 5
         }
-    )
+    ),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Processes a user query by:
@@ -372,44 +629,21 @@ async def query_knowledge_base(
         )
 
     try:
-        retrieved_data = retrieve_chunks(
+        result = await execute_query(
             query=request.query,
+            top_k=request.top_k,
             index=app.state.index,
             ids=app.state.ids,
             vector_log=app.state.vector_log,
             chunk_traces=app.state.chunk_traces,
             store_type=app.state.store_type,
-            top_k=request.top_k
+            allowed_filenames=get_owned_processed_filenames(current_user["id"]),
         )
 
-        if not retrieved_data:
+        if not result["context"]:
             raise HTTPException(status_code=404, detail="No relevant documents found for your query.")
 
-
-        # print(retrieved_data)
-
-        context_chunks = [item['chunk_text'] for item in retrieved_data]
-        filenames = [item["file_name"] for item in retrieved_data]
-        final_context_str = "\n\n---\n\n".join(context_chunks)
-        
-        final_prompt = f"Please provide a comprehensive answer to the user's query based on the following context.\n\nUser's Query: '{request.query}'"
-
-        payload = {
-            "query": final_prompt,
-            "context": final_context_str,
-            "model": "large"
-        }
-
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(INFERENCE_SERVER_URL, json=payload)
-            response.raise_for_status()
-            final_answer = response.json().get("result", "No answer could be generated.")
-        
-        
-        if not isinstance(final_answer, str):
-            final_answer = str(final_answer)
-
-        return {"answer": final_answer, "context": context_chunks , 'filenames' : filenames}
+        return result
 
     except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"Could not connect to inference server: {e}")
@@ -418,7 +652,10 @@ async def query_knowledge_base(
         raise HTTPException(status_code=500, detail="An internal error occurred.")
 
 @app.get("/graph/{graph_location:path}")
-def get_graph(graph_location: str):
+def get_graph(
+    graph_location: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Serves the generated knowledge graph HTML file.
     The graph_location should be a full path to the HTML file.
@@ -481,7 +718,8 @@ async def deep_query_knowledge_base(
             "top_k": 5,
             "create_graph": True
         }
-    )
+    ),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Orchestrates a deep query process using a `MultiTurnAgent`:
@@ -497,18 +735,16 @@ async def deep_query_knowledge_base(
         )
 
     try:
-        agent = MultiTurnAgent(
+        result = await execute_deep_query(
+            query=request.query,
+            top_k=request.top_k,
+            create_graph=request.create_graph,
             index=app.state.index,
             ids=app.state.ids,
             vector_log=app.state.vector_log,
             chunk_traces=app.state.chunk_traces,
-            store_type=app.state.store_type
-        )
-        
-        result = await agent.run(
-            query=request.query,
-            top_k=request.top_k,
-            create_graph=request.create_graph
+            store_type=app.state.store_type,
+            allowed_filenames=get_owned_processed_filenames(current_user["id"]),
         )
         
         if not result["context"]:
@@ -570,7 +806,8 @@ async def generate_outline_endpoint(
             "filenames": ["document1.pdf", "notes.txt"],
             "combine": False
         }
-    )
+    ),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Handles document outline generation by calling the `run_outline_generation` 
@@ -578,7 +815,8 @@ async def generate_outline_endpoint(
     `combine` flag, returning either individual outlines for each file or a 
     single combined outline.
     """
-    results = await run_outline_generation(request.filenames, request.combine)
+    filenames = validate_owned_processed_filenames(current_user["id"], request.filenames)
+    results = await run_outline_generation(filenames, request.combine)
     return results
 
 @app.post(
@@ -592,13 +830,15 @@ async def generate_outline_endpoint(
     }
 )
 async def summarize_endpoint(
-    request: SummarizeRequest  # This now correctly refers to the class above
+    request: SummarizeRequest,  # This now correctly refers to the class above
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Handles document summarization.
     """
     # This call now correctly refers to the async function defined above
-    results = await run_summarization(request.filenames)
+    filenames = validate_owned_processed_filenames(current_user["id"], request.filenames)
+    results = await run_summarization(filenames)
     
     # The return format {filename: summary_text} is very useful for the frontend
     return {
@@ -616,12 +856,14 @@ async def summarize_endpoint(
     }
 )
 async def generate_faq_endpoint(
-    request: GenerateRequest
+    request: GenerateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Handles FAQ generation.
     """
-    results = await run_faq_generation(request.filenames)
+    filenames = validate_owned_processed_filenames(current_user["id"], request.filenames)
+    results = await run_faq_generation(filenames)
     return {
         "faqs": results
     }
@@ -637,13 +879,15 @@ async def generate_faq_endpoint(
     }
 )
 async def generate_quiz_endpoint(
-    request: QuizRequest
+    request: QuizRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Handles quiz generation.
     """
   
-    results = await run_quiz_generation(filenames=request.filenames , question_type=request.question_type ,count=request.count )
+    filenames = validate_owned_processed_filenames(current_user["id"], request.filenames)
+    results = await run_quiz_generation(filenames=filenames , question_type=request.question_type ,count=request.count )
     return {
         "quiz": results
     }
@@ -659,12 +903,14 @@ async def generate_quiz_endpoint(
     }
 )
 async def generate_flashcards_endpoint(
-    request: GenerateRequest
+    request: GenerateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Handles flashcards generation.
     """
-    results = await run_flashcards_generation(request.filenames)
+    filenames = validate_owned_processed_filenames(current_user["id"], request.filenames)
+    results = await run_flashcards_generation(filenames)
     return {
         "flashcards": results
     }
@@ -681,12 +927,15 @@ async def generate_flashcards_endpoint(
     }
 )
 async def delete_files_endpoint(
-    request: DeleteFilesRequest
+    request: DeleteFilesRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Handles file deletion.
     """
-    result = delete_files_from_db(request.filenames)
+    filenames = get_room_service().store.assert_file_ownership(current_user["id"], request.filenames)
+    result = delete_files_from_db(filenames)
+    get_room_service().store.mark_uploaded_files_deleted(current_user["id"], filenames)
     if result["errors"]:
         return {
             "message": "Some files could not be deleted.",
@@ -696,6 +945,821 @@ async def delete_files_endpoint(
     return {
         "message": f"Successfully deleted {result['deleted_count']} files.",
     }
+
+
+@app.post("/auth/register", summary="Register a new account")
+async def register(
+    request: AuthRegisterRequest,
+    http_request: Request,
+):
+    try:
+        return get_auth_service().register(
+            email=request.email,
+            display_name=request.display_name,
+            password=request.password,
+            user_agent=http_request.headers.get("user-agent"),
+            ip_address=resolve_client_ip(http_request),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/auth/login", summary="Log into an existing account")
+async def login(
+    request: AuthLoginRequest,
+    http_request: Request,
+):
+    try:
+        return get_auth_service().login(
+            email=request.email,
+            password=request.password,
+            user_agent=http_request.headers.get("user-agent"),
+            ip_address=resolve_client_ip(http_request),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+
+@app.post("/auth/refresh", summary="Refresh an access token")
+async def refresh_auth_token(
+    request: AuthRefreshRequest,
+    http_request: Request,
+):
+    try:
+        return get_auth_service().refresh(
+            request.refresh_token,
+            user_agent=http_request.headers.get("user-agent"),
+            ip_address=resolve_client_ip(http_request),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+
+@app.post("/auth/logout", summary="Log out from the current session")
+async def logout_auth(
+    request: AuthLogoutRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    get_auth_service().logout(request.refresh_token)
+    return {"ok": True, "user_id": current_user["id"]}
+
+
+@app.get("/auth/me", summary="Get the current authenticated user")
+async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return current_user
+
+
+@app.get("/admin/users", summary="List all users for admin management")
+async def list_admin_users(current_user: Dict[str, Any] = Depends(require_admin)):
+    return {"users": get_room_service().store.list_users_admin()}
+
+
+@app.patch("/admin/users/{user_id}", summary="Update a user as admin")
+async def update_admin_user(
+    user_id: str,
+    request: AdminUserUpdateRequest,
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    try:
+        return get_room_service().store.update_user_admin(
+            user_id,
+            display_name=request.display_name,
+            email=request.email,
+            is_active=request.is_active,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/admin/users/{user_id}", summary="Delete a user as admin")
+async def delete_admin_user(
+    user_id: str,
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    try:
+        get_room_service().store.delete_user_admin(user_id)
+        return {"ok": True, "user_id": user_id}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/admin/rooms", summary="List all rooms for admin management")
+async def list_admin_rooms(current_user: Dict[str, Any] = Depends(require_admin)):
+    return {"rooms": get_room_service().store.list_rooms_admin()}
+
+
+@app.patch("/admin/rooms/{room_id}", summary="Update a room as admin")
+async def update_admin_room(
+    room_id: str,
+    request: AdminRoomUpdateRequest,
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    try:
+        return get_room_service().store.update_room_admin(
+            room_id,
+            name=request.name,
+            max_members=request.max_members,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/admin/rooms/{room_id}", summary="Delete a room as admin")
+async def delete_admin_room(
+    room_id: str,
+    current_user: Dict[str, Any] = Depends(require_admin),
+):
+    try:
+        get_room_service().store.delete_room_admin(room_id)
+        return {"ok": True, "room_id": room_id}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+def resolve_room_action_filenames(room_id: str, request: RoomActionRequest) -> List[str]:
+    room_service = get_room_service()
+    filenames = request.filenames or room_service.get_room_context_filenames(room_id)
+    if not filenames:
+        raise HTTPException(
+            status_code=400,
+            detail="No files were provided and the room has no shared context files.",
+        )
+    return filenames
+
+
+async def broadcast_room_snapshot(room_id: str, event: str, payload: Dict[str, Any]) -> None:
+    await get_room_hub().broadcast(room_id, event, payload)
+
+
+async def broadcast_room_presence(room_id: str) -> None:
+    hub = get_room_hub()
+    await hub.broadcast(
+        room_id,
+        "presence_updated",
+        hub.room_presence(room_id),
+    )
+
+
+def attach_owner_room_password(room: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    if room.get("owner_user_id") == user_id:
+        room["password"] = get_room_service().store.get_room_password_for_owner(room["id"], user_id)
+    return room
+
+
+@app.get("/rooms", summary="List all study rooms")
+async def list_rooms(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return {"rooms": get_room_service().store.list_rooms()}
+
+
+@app.post("/rooms", summary="Create a study room")
+async def create_room(
+    request: RoomCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        room = get_room_service().store.create_room(
+            name=request.name,
+            owner_user_id=current_user["id"],
+            max_members=request.max_members,
+            password=request.password,
+        )
+        return attach_owner_room_password(room, current_user["id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/rooms/invites/received", summary="List invites received by the current user")
+async def list_received_room_invites(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return {"invites": get_room_service().store.list_received_invites(current_user["id"])}
+
+
+@app.post("/rooms/invites/{invite_id}/respond", summary="Accept or decline a room invite")
+async def respond_room_invite(
+    invite_id: str,
+    request: RoomInviteRespondRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        invite = get_room_service().store.respond_to_invite(
+            invite_id,
+            current_user["id"],
+            accept=request.accept,
+        )
+        room_id = invite["room_id"]
+        room = get_room_service().store.get_room(room_id)
+        await broadcast_room_snapshot(
+            room_id,
+            "member_joined" if request.accept else "invite_responded",
+            {"room": room, "invite": invite},
+        )
+        await broadcast_room_presence(room_id)
+        return {"invite": invite, "room": room}
+    except ValueError as exc:
+        status = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status, detail=str(exc))
+
+
+@app.get("/rooms/{room_id}", summary="Get a room with members and shared context")
+async def get_room(room_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        room_service = get_room_service()
+        room = room_service.store.get_room(room_id)
+        room = attach_owner_room_password(room, current_user["id"])
+        try:
+            room_service.store.ensure_member(room_id, current_user["id"])
+            room["artifacts"] = room_service.store.list_artifacts(room_id)
+        except ValueError:
+            room["artifacts"] = []
+        return room
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/join", summary="Join a study room")
+async def join_room(
+    room_id: str,
+    request: RoomJoinRequest = Body(default_factory=RoomJoinRequest),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        room = get_room_service().store.join_room(
+            room_id,
+            current_user["id"],
+            password=request.password,
+        )
+        room = attach_owner_room_password(room, current_user["id"])
+        await broadcast_room_snapshot(
+            room_id,
+            "member_joined",
+            {"room": room, "joined_user": room.get("joined_user")},
+        )
+        await broadcast_room_presence(room_id)
+        return room
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+
+
+@app.patch("/rooms/{room_id}", summary="Update room settings (owner only)")
+async def update_room(
+    room_id: str,
+    request: RoomUpdateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        room = get_room_service().store.update_room_owner(
+            room_id,
+            current_user["id"],
+            name=request.name,
+            max_members=request.max_members,
+            password=request.password,
+            clear_password=request.clear_password,
+        )
+        room = attach_owner_room_password(room, current_user["id"])
+        await broadcast_room_snapshot(room_id, "room_updated", {"room": room})
+        return room
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+
+
+@app.delete("/rooms/{room_id}", summary="Delete a room (owner only)")
+async def delete_room(
+    room_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        get_room_service().store.delete_room_owner(room_id, current_user["id"])
+        await broadcast_room_snapshot(room_id, "room_deleted", {"room_id": room_id})
+        return {"ok": True, "room_id": room_id}
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/kick", summary="Kick a room member (owner only)")
+async def kick_room_member(
+    room_id: str,
+    request: RoomKickRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        room = get_room_service().store.kick_member(
+            room_id,
+            current_user["id"],
+            request.user_id,
+        )
+        get_room_hub().disconnect(room_id, request.user_id)
+        await broadcast_room_snapshot(
+            room_id,
+            "member_kicked",
+            {"room": room, "user_id": request.user_id},
+        )
+        await broadcast_room_presence(room_id)
+        return room
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/invite", summary="Invite a user to a room (owner only)")
+async def invite_to_room(
+    room_id: str,
+    request: RoomInviteRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        invite = get_room_service().store.create_room_invite(
+            room_id,
+            current_user["id"],
+            request.username,
+        )
+        room = get_room_service().store.get_room(room_id)
+        await broadcast_room_snapshot(
+            room_id,
+            "invite_created",
+            {"invite": invite, "room": room},
+        )
+        return {"invite": invite, "room": room}
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/leave", summary="Leave a study room")
+async def leave_room(room_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
+    try:
+        room_service = get_room_service()
+        room_service.store.ensure_member(room_id, current_user["id"])
+        room = room_service.store.get_room(room_id)
+        get_room_hub().disconnect(room_id, current_user["id"])
+        await broadcast_room_snapshot(
+            room_id,
+            "room_updated",
+            {"room": room, "user_id": current_user["id"]},
+        )
+        await broadcast_room_presence(room_id)
+        return room
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/rooms/{room_id}/messages", summary="List room messages")
+async def list_room_messages(
+    room_id: str,
+    limit: int = 100,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        get_room_service().store.ensure_member(room_id, current_user["id"])
+        return {"messages": get_room_service().store.list_messages(room_id, limit=limit)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/messages", summary="Post a room message")
+async def post_room_message(
+    room_id: str,
+    request: RoomMessageRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        message = get_room_service().store.add_message(
+            room_id=room_id,
+            user_id=current_user["id"],
+            content=request.content,
+            message_type=request.message_type,
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": message})
+        return message
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/rooms/{room_id}/context/files", summary="List shared room context files")
+async def list_room_context_files(
+    room_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    get_room_service().store.ensure_member(room_id, current_user["id"])
+    return {"files": get_room_service().store.list_context_files(room_id)}
+
+
+@app.post("/rooms/{room_id}/context/files", summary="Add files to the shared room context")
+async def add_room_context_files(
+    room_id: str,
+    request: RoomContextFilesRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        filenames = room_service.validate_context_files(current_user["id"], request.filenames)
+        files = room_service.store.add_context_files(room_id, current_user["id"], filenames)
+        await broadcast_room_snapshot(room_id, "context_updated", {"files": files})
+        return {"files": files}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/context/files/remove", summary="Remove a file from shared room context")
+async def remove_room_context_file(
+    room_id: str,
+    request: RoomContextRemoveRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        room_service.store.ensure_member(room_id, current_user["id"])
+        files = room_service.store.remove_context_file(room_id, request.filename)
+        await broadcast_room_snapshot(room_id, "context_updated", {"files": files})
+        return {"files": files}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/rooms/{room_id}/artifacts", summary="List room-generated artifacts")
+async def list_room_artifacts(
+    room_id: str,
+    limit: int = 100,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    get_room_service().store.ensure_member(room_id, current_user["id"])
+    return {"artifacts": get_room_service().store.list_artifacts(room_id, limit=limit)}
+
+
+@app.get("/rooms/{room_id}/canvas/snapshot", summary="Get latest room canvas snapshot")
+async def get_room_canvas_snapshot(
+    room_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        artifact = get_room_service().get_latest_canvas_snapshot(
+            room_id=room_id,
+            user_id=current_user["id"],
+        )
+        return {"artifact": artifact}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/canvas/snapshot", summary="Save a room canvas snapshot")
+async def save_room_canvas_snapshot(
+    room_id: str,
+    request: RoomCanvasSnapshotRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    try:
+        artifact = get_room_service().save_canvas_snapshot(
+            room_id=room_id,
+            user_id=current_user["id"],
+            board=request.board,
+            title=request.title,
+        )
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": artifact})
+        await broadcast_room_snapshot(room_id, "canvas_snapshot_updated", {"artifact": artifact})
+        return {"artifact": artifact}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.websocket("/rooms/{room_id}/ws")
+async def room_websocket(room_id: str, websocket: WebSocket, token: str):
+    room_service = get_room_service()
+    room_hub = get_room_hub()
+    user_id: str | None = None
+    connection_id: str | None = None
+    try:
+        current_user = get_auth_service().get_current_user(token)
+        user_id = current_user["id"]
+        if app.state.room_store is not None:
+            app.state.room_store.touch_user_activity(user_id)
+        room_service.store.ensure_member(room_id, user_id)
+        connection_id = await room_hub.connect(room_id, user_id, websocket)
+        await room_hub.send_json(
+            room_id,
+            user_id,
+            "room_snapshot",
+            {
+                "room": attach_owner_room_password(room_service.store.get_room(room_id), user_id),
+                "messages": room_service.store.list_messages(room_id, limit=100),
+                "artifacts": room_service.store.list_artifacts(room_id, limit=100),
+                "presence": room_hub.room_presence(room_id),
+            },
+        )
+        await broadcast_room_presence(room_id)
+
+        while True:
+            payload = await websocket.receive_json()
+            event = payload.get("event")
+            if event == "ping":
+                await room_hub.send_json(room_id, user_id, "pong", {"ok": True})
+            elif event == "presence":
+                await room_hub.send_json(
+                    room_id,
+                    user_id,
+                    "presence_updated",
+                    room_hub.room_presence(room_id),
+                )
+            elif event == "presence_state":
+                incoming_state = payload.get("payload") or {}
+                if not isinstance(incoming_state, dict):
+                    await room_hub.send_json(
+                        room_id,
+                        user_id,
+                        "invalid_payload",
+                        {"event": event, "detail": "payload must be an object"},
+                    )
+                    continue
+                try:
+                    state_patch = RoomPresenceStateUpdateRequest.model_validate(
+                        incoming_state
+                    ).model_dump(exclude_none=True)
+                except ValidationError:
+                    await room_hub.send_json(
+                        room_id,
+                        user_id,
+                        "invalid_payload",
+                        {"event": event, "detail": "invalid presence state payload"},
+                    )
+                    continue
+                merged_state = room_hub.update_user_state(room_id, user_id, state_patch)
+                await room_hub.send_json(
+                    room_id,
+                    user_id,
+                    "presence_state_ack",
+                    {"user_id": user_id, "state": merged_state},
+                )
+                await broadcast_room_presence(room_id)
+            elif event in {"call_signal", "call_control", "canvas_delta", "canvas_cursor"}:
+                relay_payload = payload.get("payload") or {}
+                if not isinstance(relay_payload, dict):
+                    await room_hub.send_json(
+                        room_id,
+                        user_id,
+                        "invalid_payload",
+                        {"event": event, "detail": "payload must be an object"},
+                    )
+                    continue
+                relay_payload["user_id"] = user_id
+                await room_hub.broadcast(room_id, event, relay_payload)
+            else:
+                await room_hub.send_json(
+                    room_id,
+                    user_id,
+                    "unsupported_event",
+                    {"event": event},
+                )
+    except WebSocketDisconnect:
+        if user_id is not None:
+            room_hub.disconnect(room_id, user_id, connection_id)
+            await broadcast_room_presence(room_id)
+    except ValueError:
+        await websocket.close(code=1008, reason="Invalid room membership.")
+    except Exception:
+        if user_id is not None:
+            room_hub.disconnect(room_id, user_id, connection_id)
+            await broadcast_room_presence(room_id)
+        await websocket.close(code=1011, reason="Room websocket error.")
+
+
+@app.post("/rooms/{room_id}/actions/query", summary="Run a shared room query")
+async def run_room_query(
+    room_id: str,
+    request: RoomQueryRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_started",
+            {"action": "query", "user_id": current_user["id"], "query": request.query},
+        )
+        result = await room_service.run_room_query(
+            room_id=room_id,
+            user_id=current_user["id"],
+            query=request.query,
+            top_k=request.top_k,
+            app_state=app.state,
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["question_message"]})
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["answer_message"]})
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": result["artifact"]})
+        await broadcast_room_snapshot(
+            room_id,
+            "job_finished",
+            {"action": "query", "user_id": current_user["id"], "artifact": result["artifact"]},
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except httpx.RequestError as exc:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_failed",
+            {"action": "query", "user_id": current_user["id"], "error": str(exc)},
+        )
+        raise HTTPException(status_code=500, detail=f"Could not connect to inference server: {exc}")
+
+
+@app.post("/rooms/{room_id}/actions/deepquery", summary="Run a shared room deep query")
+async def run_room_deepquery(
+    room_id: str,
+    request: RoomDeepQueryRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_started",
+            {"action": "deepquery", "user_id": current_user["id"], "query": request.query},
+        )
+        result = await room_service.run_room_deep_query(
+            room_id=room_id,
+            user_id=current_user["id"],
+            query=request.query,
+            top_k=request.top_k,
+            create_graph=request.create_graph,
+            app_state=app.state,
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["question_message"]})
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["answer_message"]})
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": result["artifact"]})
+        await broadcast_room_snapshot(
+            room_id,
+            "job_finished",
+            {"action": "deepquery", "user_id": current_user["id"], "artifact": result["artifact"]},
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except httpx.RequestError as exc:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_failed",
+            {"action": "deepquery", "user_id": current_user["id"], "error": str(exc)},
+        )
+        raise HTTPException(status_code=500, detail=f"Could not connect to inference server: {exc}")
+
+
+@app.post("/rooms/{room_id}/actions/summarize", summary="Generate room summaries")
+async def run_room_summarize(
+    room_id: str,
+    request: RoomActionRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_started",
+            {"action": "summarize", "user_id": current_user["id"]},
+        )
+        result = await room_service.run_room_generation(
+            room_id=room_id,
+            user_id=current_user["id"],
+            action="summarize",
+            filenames=resolve_room_action_filenames(room_id, request),
+            options={},
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["system_message"]})
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": result["artifact"]})
+        await broadcast_room_snapshot(
+            room_id,
+            "job_finished",
+            {"action": "summarize", "user_id": current_user["id"], "artifact": result["artifact"]},
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/actions/faq", summary="Generate room FAQs")
+async def run_room_faq(
+    room_id: str,
+    request: RoomActionRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_started",
+            {"action": "faq", "user_id": current_user["id"]},
+        )
+        result = await room_service.run_room_generation(
+            room_id=room_id,
+            user_id=current_user["id"],
+            action="faq",
+            filenames=resolve_room_action_filenames(room_id, request),
+            options={},
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["system_message"]})
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": result["artifact"]})
+        await broadcast_room_snapshot(
+            room_id,
+            "job_finished",
+            {"action": "faq", "user_id": current_user["id"], "artifact": result["artifact"]},
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/actions/flashcards", summary="Generate room flashcards")
+async def run_room_flashcards(
+    room_id: str,
+    request: RoomActionRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_started",
+            {"action": "flashcards", "user_id": current_user["id"]},
+        )
+        result = await room_service.run_room_generation(
+            room_id=room_id,
+            user_id=current_user["id"],
+            action="flashcards",
+            filenames=resolve_room_action_filenames(room_id, request),
+            options={},
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["system_message"]})
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": result["artifact"]})
+        await broadcast_room_snapshot(
+            room_id,
+            "job_finished",
+            {"action": "flashcards", "user_id": current_user["id"], "artifact": result["artifact"]},
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/actions/quiz", summary="Generate room quiz")
+async def run_room_quiz(
+    room_id: str,
+    request: RoomActionRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_started",
+            {"action": "quiz", "user_id": current_user["id"]},
+        )
+        result = await room_service.run_room_generation(
+            room_id=room_id,
+            user_id=current_user["id"],
+            action="quiz",
+            filenames=resolve_room_action_filenames(room_id, request),
+            options={"question_type": request.question_type, "count": request.count},
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["system_message"]})
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": result["artifact"]})
+        await broadcast_room_snapshot(
+            room_id,
+            "job_finished",
+            {"action": "quiz", "user_id": current_user["id"], "artifact": result["artifact"]},
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/rooms/{room_id}/actions/outline", summary="Generate room outline")
+async def run_room_outline(
+    room_id: str,
+    request: RoomActionRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    room_service = get_room_service()
+    try:
+        await broadcast_room_snapshot(
+            room_id,
+            "job_started",
+            {"action": "outline", "user_id": current_user["id"]},
+        )
+        result = await room_service.run_room_generation(
+            room_id=room_id,
+            user_id=current_user["id"],
+            action="outline",
+            filenames=resolve_room_action_filenames(room_id, request),
+            options={"combine": request.combine},
+        )
+        await broadcast_room_snapshot(room_id, "message_created", {"message": result["system_message"]})
+        await broadcast_room_snapshot(room_id, "artifact_created", {"artifact": result["artifact"]})
+        await broadcast_room_snapshot(
+            room_id,
+            "job_finished",
+            {"action": "outline", "user_id": current_user["id"], "artifact": result["artifact"]},
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 # --- Main Execution ---
 if __name__ == "__main__":

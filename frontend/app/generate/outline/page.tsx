@@ -6,7 +6,7 @@ import type { OutlineResponse } from '@/types/api';
 import FileSelector from '@/components/FileSelector';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import BackButton from '@/components/BackButton';
+import StudyPageShell from '@/components/StudyPageShell';
 
 export default function OutlinePage() {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -41,16 +41,12 @@ export default function OutlinePage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <BackButton />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Generate Outline</h1>
-        <p className="text-gray-400">
-          Generate hierarchical outlines from your documents
-        </p>
-      </div>
-
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-6">
+    <StudyPageShell
+      eyebrow="Study Material"
+      title="Generate Outline"
+      description="Create structured outlines from your source documents with the same study-room presentation style."
+    >
+      <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6 space-y-6">
         <FileSelector
           selectedFiles={selectedFiles}
           onSelectionChange={setSelectedFiles}
@@ -73,7 +69,7 @@ export default function OutlinePage() {
         <button
           onClick={handleGenerate}
           disabled={loading || selectedFiles.length === 0}
-          className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+          className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
         >
           {loading ? (
             <>
@@ -105,7 +101,7 @@ export default function OutlinePage() {
             </div>
 
             {outline.combined_outline ? (
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                 <pre className="whitespace-pre-wrap text-sm text-gray-200 font-mono">
                   {outline.combined_outline}
                 </pre>
@@ -113,7 +109,7 @@ export default function OutlinePage() {
             ) : (
               <div className="space-y-4">
                 {Object.entries(outline.individual_outlines || {}).map(([filename, outlineText]) => (
-                  <div key={filename} className="border border-gray-700 rounded-lg p-4 bg-gray-800">
+                  <div key={filename} className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                     <h3 className="text-lg font-medium text-white mb-2">{filename}</h3>
                     <div className="flex justify-end mb-2">
                       <button
@@ -123,7 +119,7 @@ export default function OutlinePage() {
                         Copy
                       </button>
                     </div>
-                    <pre className="whitespace-pre-wrap text-sm text-gray-200 font-mono bg-gray-900 rounded p-3">
+                    <pre className="whitespace-pre-wrap rounded-2xl bg-black/20 p-3 text-sm font-mono text-gray-200">
                       {outlineText}
                     </pre>
                   </div>
@@ -133,7 +129,6 @@ export default function OutlinePage() {
           </div>
         )}
       </div>
-    </div>
+    </StudyPageShell>
   );
 }
-

@@ -15,6 +15,7 @@ somepackage
 Deprecated
 fastapi 
 uvicorn 
+websockets
 loguru 
 prometheus-client 
 opentelemetry-sdk 
@@ -23,3 +24,4 @@ opentelemetry-exporter-jaeger
 llama-cpp-python
 groq
 setuptools
+psycopg[binary]

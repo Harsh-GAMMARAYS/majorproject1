@@ -1,6 +1,6 @@
-import uuid
 import time
-from typing import List, Dict, Any
+import uuid
+from typing import Any, Dict, List, Optional, Sequence
 import httpx
 from pathlib import Path
 
@@ -11,6 +11,7 @@ sys.path.append(str(project_root))
 from src.promptParser.query_parser import break_down_query
 from src.retrieverPipeline import retrieve_chunks
 from src.knowledgeGraphPipeline import create_knowledge_graph_from_context
+from src.services.query_service import filter_retrieved_data
 
 INFERENCE_SERVER_URL = "http://127.0.0.1:8000/infer"
 
@@ -22,7 +23,14 @@ class MultiTurnAgent:
         self.chunk_traces = chunk_traces
         self.store_type = store_type
 
-    async def run(self, query: str, top_k: int = 5, create_graph: bool = False) -> Dict[str, Any]:
+    async def run(
+        self,
+        query: str,
+        top_k: int = 5,
+        create_graph: bool = False,
+        allowed_filenames: Optional[Sequence[str]] = None,
+        supplemental_context: str = "",
+    ) -> Dict[str, Any]:
         """
         Runs the multi-turn query process.
         """
@@ -32,6 +40,7 @@ class MultiTurnAgent:
 
         accumulated_context_chunks = []
         intermediate_summaries = []
+        accumulated_filenames: List[str] = []
 
         for sub_query in sub_queries:
             print(f"Processing sub-query: '{sub_query}'")
@@ -44,7 +53,12 @@ class MultiTurnAgent:
                 vector_log=self.vector_log,
                 chunk_traces=self.chunk_traces,
                 store_type=self.store_type,
-                top_k=top_k
+                top_k=max(top_k * 5, top_k) if allowed_filenames else top_k,
+            )
+            retrieved_data = filter_retrieved_data(
+                retrieved_data,
+                allowed_filenames=allowed_filenames,
+                top_k=top_k,
             )
 
             if not retrieved_data:
@@ -53,7 +67,9 @@ class MultiTurnAgent:
             context_chunks = [item['chunk_text'] for item in retrieved_data]
             
             filenames = [item['file_name'] for item in retrieved_data]
-            
+            for filename in filenames:
+                if filename not in accumulated_filenames:
+                    accumulated_filenames.append(filename)
             
             accumulated_context_chunks.extend(context_chunks)
             
@@ -86,12 +102,18 @@ class MultiTurnAgent:
                     "filenames":[]
                 }
             
-            final_context_str = "\n\n---\n\n".join(accumulated_context_chunks)
+            final_context_parts = list(accumulated_context_chunks)
+            if supplemental_context:
+                final_context_parts.append(f"Study room conversation context:\n{supplemental_context}")
+            final_context_str = "\n\n---\n\n".join(final_context_parts)
             final_prompt = f"Please provide a comprehensive answer to the user's query based on the following context.\n\nUser's Query: '{query}'\n\nContext:\n{final_context_str}"
         else:
             # 3. Generate the final answer
             print("Generating final answer...")
-            final_context = "\n\n---\n\n".join(intermediate_summaries)
+            final_context_parts = list(intermediate_summaries)
+            if supplemental_context:
+                final_context_parts.append(f"Study room conversation context:\n{supplemental_context}")
+            final_context = "\n\n---\n\n".join(final_context_parts)
             final_prompt = f"""
             Based on the following information gathered from a document knowledge base, provide a comprehensive answer to the user's original query.
 
@@ -134,5 +156,5 @@ class MultiTurnAgent:
             "sub_queries": sub_queries,
             "graph_location": graph_location,
             "graph_data": graph_data,  # NEW: JSON data for vis.js
-            "filenames": filenames,
+            "filenames": accumulated_filenames,
         }

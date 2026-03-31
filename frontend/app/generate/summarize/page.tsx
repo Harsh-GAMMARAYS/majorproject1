@@ -6,7 +6,7 @@ import type { SummarizeResponse } from '@/types/api';
 import FileSelector from '@/components/FileSelector';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import BackButton from '@/components/BackButton';
+import StudyPageShell from '@/components/StudyPageShell';
 
 export default function SummarizePage() {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -39,16 +39,12 @@ export default function SummarizePage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <BackButton />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Summarize Documents</h1>
-        <p className="text-gray-400">
-          Generate summaries for your uploaded documents
-        </p>
-      </div>
-
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-6">
+    <StudyPageShell
+      eyebrow="Study Material"
+      title="Summarize Documents"
+      description="Generate concise summaries from one or more documents using the same study-room visual language."
+    >
+      <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6 space-y-6">
         <FileSelector
           selectedFiles={selectedFiles}
           onSelectionChange={setSelectedFiles}
@@ -58,7 +54,7 @@ export default function SummarizePage() {
         <button
           onClick={handleGenerate}
           disabled={loading || selectedFiles.length === 0}
-          className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+          className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
         >
           {loading ? (
             <>
@@ -77,7 +73,7 @@ export default function SummarizePage() {
             <h2 className="text-xl font-semibold text-white mb-4">Generated Summaries</h2>
             <div className="space-y-4">
               {summaries.summaries.map((item) => (
-                <div key={item.filename} className="border border-gray-700 rounded-lg p-4 bg-gray-800">
+                <div key={item.filename} className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="text-lg font-medium text-white">{item.filename}</h3>
                     <button
@@ -87,7 +83,7 @@ export default function SummarizePage() {
                       Copy
                     </button>
                   </div>
-                  <div className="bg-gray-900 rounded-lg p-4">
+                  <div className="rounded-2xl bg-black/20 p-4">
                     <p className="text-gray-200 whitespace-pre-wrap">{item.summary}</p>
                   </div>
                 </div>
@@ -96,7 +92,6 @@ export default function SummarizePage() {
           </div>
         )}
       </div>
-    </div>
+    </StudyPageShell>
   );
 }
-

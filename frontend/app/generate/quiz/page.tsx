@@ -6,7 +6,7 @@ import type { QuizResponse, QuizQuestion } from '@/types/api';
 import FileSelector from '@/components/FileSelector';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import BackButton from '@/components/BackButton';
+import StudyPageShell from '@/components/StudyPageShell';
 
 export default function QuizPage() {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -66,17 +66,13 @@ export default function QuizPage() {
   const currentQuestion = quiz?.quiz[currentIndex];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <BackButton />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Generate Quiz</h1>
-        <p className="text-gray-400">
-          Generate interactive quizzes from your documents
-        </p>
-      </div>
-
+    <StudyPageShell
+      eyebrow="Study Material"
+      title="Generate Quiz"
+      description="Build interactive quizzes from your documents inside the same study-oriented visual system."
+    >
       {!quiz ? (
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-6">
+          <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6 space-y-6">
           <FileSelector
             selectedFiles={selectedFiles}
             onSelectionChange={setSelectedFiles}
@@ -91,7 +87,7 @@ export default function QuizPage() {
               <select
                 value={questionType}
                 onChange={(e) => setQuestionType(e.target.value as 'mcq' | 'short')}
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-white focus:ring-emerald-500 focus:border-emerald-500"
               >
                 <option value="mcq">Multiple Choice (MCQ)</option>
                 <option value="short">Short Answer</option>
@@ -108,7 +104,7 @@ export default function QuizPage() {
                 max="50"
                 value={count}
                 onChange={(e) => setCount(parseInt(e.target.value) || 10)}
-                className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-white focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
           </div>
@@ -116,7 +112,7 @@ export default function QuizPage() {
           <button
             onClick={handleGenerate}
             disabled={loading || selectedFiles.length === 0}
-            className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+            className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
           >
             {loading ? (
               <>
@@ -129,9 +125,9 @@ export default function QuizPage() {
           </button>
 
           {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
-        </div>
-      ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+          </div>
+        ) : (
+          <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-white">
               Question {currentIndex + 1} of {quiz.quiz.length}
@@ -145,7 +141,7 @@ export default function QuizPage() {
 
           {currentQuestion && (
             <div className="space-y-4">
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                 <h3 className="text-lg font-medium text-white mb-2">
                   {currentQuestion.question}
                 </h3>
@@ -254,9 +250,8 @@ export default function QuizPage() {
               </button>
             )}
           </div>
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+    </StudyPageShell>
   );
 }
-

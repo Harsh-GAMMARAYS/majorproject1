@@ -6,7 +6,7 @@ import type { FAQResponse } from '@/types/api';
 import FileSelector from '@/components/FileSelector';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
-import BackButton from '@/components/BackButton';
+import StudyPageShell from '@/components/StudyPageShell';
 
 export default function FAQPage() {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -36,16 +36,12 @@ export default function FAQPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <BackButton />
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Generate FAQ</h1>
-        <p className="text-gray-400">
-          Generate frequently asked questions from your documents
-        </p>
-      </div>
-
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-6">
+    <StudyPageShell
+      eyebrow="Study Material"
+      title="Generate FAQ"
+      description="Turn your documents into quick study prompts and answers with the same study-room card treatment."
+    >
+      <div className="rounded-[28px] border border-gray-800 bg-[linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-6 space-y-6">
         <FileSelector
           selectedFiles={selectedFiles}
           onSelectionChange={setSelectedFiles}
@@ -55,7 +51,7 @@ export default function FAQPage() {
         <button
           onClick={handleGenerate}
           disabled={loading || selectedFiles.length === 0}
-          className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+          className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
         >
           {loading ? (
             <>
@@ -78,11 +74,11 @@ export default function FAQPage() {
               {faqs.faqs.map((faq, index) => (
                 <div
                   key={index}
-                  className="border border-gray-700 rounded-lg overflow-hidden bg-gray-800"
+                  className="overflow-hidden rounded-2xl border border-gray-700 bg-black/20"
                 >
                   <button
                     onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                    className="w-full px-4 py-3 text-left bg-gray-800 hover:bg-gray-700 transition-colors flex justify-between items-center"
+                    className="flex w-full items-center justify-between bg-black/20 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
                   >
                     <span className="font-medium text-white">{faq.question}</span>
                     <svg
@@ -102,7 +98,7 @@ export default function FAQPage() {
                     </svg>
                   </button>
                   {openIndex === index && (
-                    <div className="px-4 py-3 bg-gray-900 border-t border-gray-700">
+                      <div className="border-t border-gray-700 bg-black/20 px-4 py-3">
                       <p className="text-gray-200 whitespace-pre-wrap mb-2">{faq.answer}</p>
                       <p className="text-xs text-gray-400">
                         Source: <span className="font-medium text-gray-300">{faq.source}</span>
@@ -115,7 +111,6 @@ export default function FAQPage() {
           </div>
         )}
       </div>
-    </div>
+    </StudyPageShell>
   );
 }
-

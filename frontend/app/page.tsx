@@ -14,7 +14,6 @@ import { FiUpload, FiArrowRight, FiX } from 'react-icons/fi';
 
 export default function Dashboard() {
   const router = useRouter();
-  const [refreshKey, setRefreshKey] = useState(0);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [fileStatus, setFileStatus] = useState<FileStatusResponse>({});
   const [activeTool, setActiveTool] = useState<string | null>(null);
@@ -45,9 +44,8 @@ export default function Dashboard() {
   const [isFlipped, setIsFlipped] = useState(false);
 
   const handleUploadSuccess = () => {
-    setRefreshKey((prev) => prev + 1);
     setShowUploadModal(false);
-    fetchFileStatus();
+    void fetchFileStatus();
   };
 
   const fetchFileStatus = async () => {
@@ -60,15 +58,17 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchFileStatus();
-    const interval = setInterval(fetchFileStatus, 3000);
-    return () => clearInterval(interval);
-  }, [refreshKey]);
+    void fetchFileStatus();
+  }, []);
 
   const handleToolSelect = (toolId: string | null) => {
     // Handle Knowledge Graph navigation separately
     if (toolId === 'graph') {
       router.push('/graph');
+      return;
+    }
+    if (toolId === 'rooms') {
+      router.push('/rooms');
       return;
     }
     
@@ -167,19 +167,22 @@ export default function Dashboard() {
       const totalCount = Object.keys(fileStatus).length;
       
       return (
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold text-white">Query Knowledge Base</h3>
+        <div className="space-y-5 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-400">Interactive Retrieval</p>
+              <h3 className="mt-2 text-2xl font-semibold text-white">Query Knowledge Base</h3>
+            </div>
             <button
               onClick={() => setActiveTool(null)}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="rounded-full border border-gray-800 bg-black/20 p-2 text-gray-400 transition-colors hover:text-white"
             >
               <FiX className="w-5 h-5" />
             </button>
           </div>
           
           {processedCount > 0 && (
-            <div className="bg-emerald-900/30 border border-emerald-700 rounded-lg p-3 mb-4">
+            <div className="rounded-2xl border border-emerald-900/60 bg-emerald-950/20 p-4">
               <p className="text-sm text-emerald-300">
                 📚 Searching across <span className="font-semibold">{processedCount}</span> processed document{processedCount !== 1 ? 's' : ''} 
                 {totalCount > processedCount && (
@@ -190,7 +193,7 @@ export default function Dashboard() {
           )}
 
           {queryTab === 'deep' && createGraph && (
-            <div className="mb-4">
+            <div>
               <label className="block text-sm font-medium text-white mb-2">
                 Select Sources for Knowledge Graph
               </label>
@@ -198,29 +201,29 @@ export default function Dashboard() {
                 selectedFiles={selectedFiles}
                 onSelectionChange={setSelectedFiles}
               />
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="mt-2 text-xs text-gray-400">
                 💡 Choose specific documents to build the knowledge graph from
               </p>
             </div>
           )}
           
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2">
             <button
               onClick={() => setQueryTab('simple')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 queryTab === 'simple'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  ? 'bg-emerald-500/12 text-emerald-300'
+                  : 'bg-black/10 text-gray-300 hover:bg-white/[0.04]'
               }`}
             >
               Simple Query
             </button>
             <button
               onClick={() => setQueryTab('deep')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 queryTab === 'deep'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  ? 'bg-emerald-500/12 text-emerald-300'
+                  : 'bg-black/10 text-gray-300 hover:bg-white/[0.04]'
               }`}
             >
               Deep Query
@@ -232,7 +235,7 @@ export default function Dashboard() {
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+              className="w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-white focus:border-emerald-500 focus:ring-emerald-500"
               placeholder="Enter your question here..."
             />
             
@@ -245,7 +248,7 @@ export default function Dashboard() {
                   max="20"
                   value={topK}
                   onChange={(e) => setTopK(parseInt(e.target.value) || 5)}
-                  className="w-20 px-3 py-2 border border-gray-700 bg-gray-800 text-white rounded-lg"
+                  className="w-20 rounded-xl border border-gray-700 bg-black/20 px-3 py-2 text-white"
                 />
               </label>
               {queryTab === 'deep' && (
@@ -264,7 +267,7 @@ export default function Dashboard() {
             <button
               onClick={handleQuery}
               disabled={loading}
-              className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
             >
               {loading ? (
                 <>
@@ -281,18 +284,21 @@ export default function Dashboard() {
     }
 
     return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-semibold text-white">
+      <div className="space-y-5 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-400">Study Material</p>
+            <h3 className="mt-2 text-2xl font-semibold text-white">
             {activeTool === 'outline' && 'Generate Outline'}
             {activeTool === 'summarize' && 'Summarize Documents'}
             {activeTool === 'faq' && 'Generate FAQ'}
             {activeTool === 'quiz' && 'Generate Quiz'}
             {activeTool === 'flashcards' && 'Generate Flashcards'}
-          </h3>
+            </h3>
+          </div>
           <button
             onClick={() => setActiveTool(null)}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="rounded-full border border-gray-800 bg-black/20 p-2 text-gray-400 transition-colors hover:text-white"
           >
             <FiX className="w-5 h-5" />
           </button>
@@ -307,7 +313,7 @@ export default function Dashboard() {
         <button
           onClick={handleGenerate}
           disabled={loading || selectedFiles.length === 0}
-          className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+          className="flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
         >
           {loading ? (
             <>
@@ -330,17 +336,17 @@ export default function Dashboard() {
       if ('sub_queries' in response) {
         const deepResponse = response as DeepQueryResponse;
         return (
-          <div className="p-6 space-y-4 border-t border-gray-800">
+          <div className="space-y-5 border-t border-gray-800 p-6">
             <div>
               <h3 className="text-lg font-semibold text-white mb-2">Answer</h3>
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                 <p className="text-gray-200 whitespace-pre-wrap">{deepResponse.answer}</p>
               </div>
             </div>
             {deepResponse.sub_queries.length > 0 && (
               <div>
                 <h3 className="text-lg font-semibold text-white mb-2">Sub-queries</h3>
-                <ul className="list-disc list-inside text-gray-200 space-y-1 bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <ul className="list-disc list-inside space-y-1 rounded-2xl border border-gray-700 bg-black/20 p-4 text-gray-200">
                   {deepResponse.sub_queries.map((sq, i) => (
                     <li key={i}>{sq}</li>
                   ))}
@@ -361,7 +367,7 @@ export default function Dashboard() {
                     Open in New Tab
                   </button>
                 </div>
-                <div className="border border-gray-700 rounded-lg overflow-hidden bg-white">
+                <div className="overflow-hidden rounded-[24px] border border-gray-700 bg-white">
                   <iframe
                     src={`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000'}${deepResponse.graph_location}`}
                     title="Knowledge Graph"
@@ -379,10 +385,10 @@ export default function Dashboard() {
       } else {
         const simpleResponse = response as QueryResponse;
         return (
-          <div className="p-6 space-y-4 border-t border-gray-800">
+          <div className="space-y-5 border-t border-gray-800 p-6">
             <div>
               <h3 className="text-lg font-semibold text-white mb-2">Answer</h3>
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                 <p className="text-gray-200 whitespace-pre-wrap">{simpleResponse.answer}</p>
               </div>
             </div>
@@ -391,7 +397,7 @@ export default function Dashboard() {
                 <h3 className="text-lg font-semibold text-white mb-2">Context</h3>
                 <div className="space-y-3">
                   {simpleResponse.context.map((chunk, i) => (
-                    <div key={i} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div key={i} className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                       <p className="text-sm text-gray-200 whitespace-pre-wrap">{chunk}</p>
                     </div>
                   ))}
@@ -406,11 +412,11 @@ export default function Dashboard() {
     if (activeTool === 'summarize' && 'summaries' in toolResults) {
       const response = toolResults as SummarizeResponse;
       return (
-        <div className="p-6 space-y-4 border-t border-gray-800">
+        <div className="space-y-5 border-t border-gray-800 p-6">
           <h3 className="text-lg font-semibold text-white mb-4">Generated Summaries</h3>
           <div className="space-y-4">
             {response.summaries.map((item) => (
-              <div key={item.filename} className="border border-gray-700 rounded-lg p-4 bg-gray-800">
+              <div key={item.filename} className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="text-lg font-medium text-white">{item.filename}</h4>
                   <button
@@ -420,7 +426,7 @@ export default function Dashboard() {
                     Copy
                   </button>
                 </div>
-                <div className="bg-gray-900 rounded-lg p-4">
+                <div className="rounded-2xl bg-black/20 p-4">
                   <p className="text-gray-200 whitespace-pre-wrap">{item.summary}</p>
                 </div>
               </div>
@@ -433,7 +439,7 @@ export default function Dashboard() {
     if (activeTool === 'outline' && 'individual_outlines' in toolResults) {
       const response = toolResults as OutlineResponse;
       return (
-        <div className="p-6 space-y-4 border-t border-gray-800">
+        <div className="space-y-5 border-t border-gray-800 p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-white">Generated Outline</h3>
             <button
@@ -449,13 +455,13 @@ export default function Dashboard() {
             </button>
           </div>
           {response.combined_outline ? (
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div className="rounded-2xl border border-gray-700 bg-black/20 p-4">
               <pre className="whitespace-pre-wrap text-sm text-gray-200 font-mono">{response.combined_outline}</pre>
             </div>
           ) : (
             <div className="space-y-4">
               {Object.entries(response.individual_outlines || {}).map(([filename, outlineText]) => (
-                <div key={filename} className="border border-gray-700 rounded-lg p-4 bg-gray-800">
+                <div key={filename} className="rounded-2xl border border-gray-700 bg-black/20 p-4">
                   <h4 className="text-lg font-medium text-white mb-2">{filename}</h4>
                   <button
                     onClick={() => navigator.clipboard.writeText(outlineText)}
@@ -463,7 +469,7 @@ export default function Dashboard() {
                   >
                     Copy
                   </button>
-                  <pre className="whitespace-pre-wrap text-sm text-gray-200 font-mono bg-gray-900 rounded p-3">{outlineText}</pre>
+                  <pre className="whitespace-pre-wrap rounded-2xl bg-black/20 p-3 text-sm text-gray-200 font-mono">{outlineText}</pre>
                 </div>
               ))}
             </div>
@@ -475,14 +481,14 @@ export default function Dashboard() {
     if (activeTool === 'faq' && 'faqs' in toolResults) {
       const response = toolResults as FAQResponse;
       return (
-        <div className="p-6 space-y-4 border-t border-gray-800">
+        <div className="space-y-5 border-t border-gray-800 p-6">
           <h3 className="text-lg font-semibold text-white mb-4">Generated FAQs ({response.faqs.length})</h3>
           <div className="space-y-3">
             {response.faqs.map((faq, index) => (
-              <div key={index} className="border border-gray-700 rounded-lg overflow-hidden bg-gray-800">
+              <div key={index} className="overflow-hidden rounded-2xl border border-gray-700 bg-black/20">
                 <button
                   onClick={() => setOpenFAQIndex(openFAQIndex === index ? null : index)}
-                  className="w-full px-4 py-3 text-left bg-gray-800 hover:bg-gray-700 transition-colors flex justify-between items-center"
+                  className="flex w-full items-center justify-between bg-black/10 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
                 >
                   <span className="font-medium text-white">{faq.question}</span>
                   <svg
@@ -497,7 +503,7 @@ export default function Dashboard() {
                   </svg>
                 </button>
                 {openFAQIndex === index && (
-                  <div className="px-4 py-3 bg-gray-900 border-t border-gray-700">
+                  <div className="border-t border-gray-700 bg-black/20 px-4 py-3">
                     <p className="text-gray-200 whitespace-pre-wrap mb-2">{faq.answer}</p>
                     <p className="text-xs text-gray-400">
                       Source: <span className="font-medium text-gray-300">{faq.source}</span>
@@ -530,13 +536,16 @@ export default function Dashboard() {
       const currentQuestion = response.quiz[quizIndex];
 
       return (
-        <div className="p-6 space-y-4 border-t border-gray-800">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-white">
-              Question {quizIndex + 1} of {response.quiz.length}
-            </h3>
+        <div className="space-y-5 border-t border-gray-800 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">Quiz Session</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">
+                Question {quizIndex + 1} of {response.quiz.length}
+              </h3>
+            </div>
             {showAnswers && score !== null && (
-              <div className="text-lg font-semibold text-emerald-400">
+              <div className="rounded-full bg-emerald-950/40 px-4 py-2 text-sm font-semibold text-emerald-300">
                 Score: {score} / {response.quiz.length}
               </div>
             )}
@@ -544,9 +553,10 @@ export default function Dashboard() {
 
           {currentQuestion && (
             <div className="space-y-4">
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <h4 className="text-lg font-medium text-white mb-2">{currentQuestion.question}</h4>
-                <p className="text-xs text-gray-400">Source: {currentQuestion.source}</p>
+              <div className="rounded-[24px] border border-gray-700 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.12),_transparent_38%),linear-gradient(180deg,#141414_0%,#0b0b0b_100%)] p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">Prompt</p>
+                <h4 className="mt-3 text-xl font-medium text-white">{currentQuestion.question}</h4>
+                <p className="mt-3 text-xs text-gray-400">Source: {currentQuestion.source}</p>
               </div>
 
               {currentQuestion.options ? (
@@ -554,10 +564,10 @@ export default function Dashboard() {
                   {currentQuestion.options.map((option, optIndex) => (
                     <label
                       key={optIndex}
-                      className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                      className={`flex items-center rounded-2xl border px-4 py-3 transition-colors ${
                         selectedAnswers[quizIndex] === option
-                          ? 'border-emerald-500 bg-emerald-500/20'
-                          : 'border-gray-700 hover:border-gray-600 bg-gray-800'
+                          ? 'border-emerald-500 bg-emerald-500/12'
+                          : 'border-gray-700 bg-black/20 hover:border-gray-600'
                       } ${
                         showAnswers && option === currentQuestion.answer
                           ? 'bg-emerald-900/30 border-emerald-500'
@@ -580,18 +590,18 @@ export default function Dashboard() {
                 </div>
               ) : null}
 
-              <div className="flex justify-between pt-4">
+              <div className="flex justify-between gap-3 pt-2">
                 <button
                   onClick={() => setQuizIndex(Math.max(0, quizIndex - 1))}
                   disabled={quizIndex === 0}
-                  className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 transition-colors"
+                  className="rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-sm text-gray-300 transition-colors hover:bg-white/[0.03] disabled:border-gray-800 disabled:text-gray-600"
                 >
                   Previous
                 </button>
                 {quizIndex === response.quiz.length - 1 && !showAnswers && (
                   <button
                     onClick={handleShowResults}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                    className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400"
                   >
                     Show Results
                   </button>
@@ -599,7 +609,7 @@ export default function Dashboard() {
                 <button
                   onClick={() => setQuizIndex(Math.min(response.quiz.length - 1, quizIndex + 1))}
                   disabled={quizIndex === response.quiz.length - 1}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-700 transition-colors"
+                  className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition-colors hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-400"
                 >
                   Next
                 </button>
@@ -615,37 +625,40 @@ export default function Dashboard() {
       const currentCard = response.flashcards[flashcardIndex];
 
       return (
-        <div className="p-6 space-y-4 border-t border-gray-800">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">
-              Card {flashcardIndex + 1} of {response.flashcards.length}
-            </h3>
-            <p className="text-sm text-gray-400">Source: {currentCard?.source}</p>
+        <div className="space-y-5 border-t border-gray-800 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">Flashcard Deck</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">
+                Card {flashcardIndex + 1} of {response.flashcards.length}
+              </h3>
+            </div>
+            <p className="rounded-full bg-black/20 px-3 py-2 text-xs text-gray-400">Source: {currentCard?.source}</p>
           </div>
 
-          <div className="relative h-96 perspective-1000">
+          <div className="relative h-96" style={{ perspective: '1000px' }}>
             <div
-              className={`relative w-full h-full transform-style-preserve-3d transition-transform duration-500 cursor-pointer ${
-                isFlipped ? 'rotate-y-180' : 'rotate-y-0'
-              }`}
+              className="relative h-full w-full cursor-pointer transition-transform duration-500"
+              style={{
+                transformStyle: 'preserve-3d',
+                transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+              }}
               onClick={() => setIsFlipped(!isFlipped)}
             >
-              {/* Front of card */}
-              <div className="absolute inset-0 backface-hidden rotate-y-0">
-                <div className="bg-gray-800 border-2 border-emerald-500 rounded-lg shadow-lg p-8 h-full flex flex-col justify-center items-center">
+              <div className="absolute inset-0" style={{ backfaceVisibility: 'hidden' }}>
+                <div className="flex h-full flex-col items-center justify-center rounded-[28px] border border-emerald-700/70 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.12),_transparent_42%),linear-gradient(180deg,#151515_0%,#0c0c0c_100%)] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
                   <div className="text-center">
-                    <p className="text-sm text-gray-400 mb-4">Front</p>
+                    <p className="mb-4 text-sm uppercase tracking-[0.24em] text-emerald-300">Front</p>
                     <p className="text-2xl font-medium text-white">{currentCard?.front}</p>
                   </div>
                   <p className="text-xs text-gray-500 mt-8">Click to flip</p>
                 </div>
               </div>
 
-              {/* Back of card */}
-              <div className="absolute inset-0 backface-hidden rotate-y-180">
-                <div className="bg-emerald-900/30 border-2 border-emerald-500 rounded-lg shadow-lg p-8 h-full flex flex-col justify-center items-center">
+              <div className="absolute inset-0" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                <div className="flex h-full flex-col items-center justify-center rounded-[28px] border border-emerald-500 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_42%),linear-gradient(180deg,#12231f_0%,#0b1110_100%)] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
                   <div className="text-center">
-                    <p className="text-sm text-emerald-400 mb-4">Back</p>
+                    <p className="mb-4 text-sm uppercase tracking-[0.24em] text-emerald-300">Back</p>
                     <p className="text-2xl font-medium text-white">{currentCard?.back}</p>
                   </div>
                   <p className="text-xs text-emerald-500 mt-8">Click to flip back</p>
@@ -661,13 +674,13 @@ export default function Dashboard() {
                 setIsFlipped(false);
               }}
               disabled={flashcardIndex === 0}
-              className="px-6 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 transition-colors"
+              className="rounded-2xl border border-gray-700 bg-black/20 px-6 py-3 text-sm text-gray-300 transition-colors hover:bg-white/[0.03] disabled:border-gray-800 disabled:text-gray-600"
             >
               Previous
             </button>
             <button
               onClick={() => setIsFlipped(!isFlipped)}
-              className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              className="rounded-2xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-black transition-colors hover:bg-emerald-400"
             >
               {isFlipped ? 'Show Front' : 'Show Back'}
             </button>
@@ -677,11 +690,22 @@ export default function Dashboard() {
                 setIsFlipped(false);
               }}
               disabled={flashcardIndex === response.flashcards.length - 1}
-              className="px-6 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 transition-colors"
+              className="rounded-2xl border border-gray-700 bg-black/20 px-6 py-3 text-sm text-gray-300 transition-colors hover:bg-white/[0.03] disabled:border-gray-800 disabled:text-gray-600"
             >
               Next
             </button>
           </div>
+
+          <button
+            onClick={() => {
+              setToolResults(null);
+              setFlashcardIndex(0);
+              setIsFlipped(false);
+            }}
+            className="w-full rounded-2xl border border-gray-700 bg-black/20 px-4 py-3 text-sm text-gray-300 transition-colors hover:bg-white/[0.03]"
+          >
+            Generate New Flashcards
+          </button>
         </div>
       );
     }
@@ -690,41 +714,48 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] flex flex-col">
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Panel - Sources */}
-        <div className="w-80 border-r border-gray-800 bg-[#1a1a1a] flex flex-col">
-          <div className="p-6 border-b border-gray-800">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-gray-200">Sources</h2>
-              <div className="flex gap-2">
+    <div className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.1),_transparent_20%),linear-gradient(180deg,#0d0d0d_0%,#060606_100%)]">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex min-h-0 w-80 flex-col border-r border-gray-800 bg-[#121212]">
+          <div className="border-b border-gray-800 px-5 py-4">
+            <div className="mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-400">Library</p>
+              <div className="mt-2 flex items-baseline justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-100">Sources</h2>
+                  <p className="mt-1 text-sm text-gray-500">{Object.keys(fileStatus).length} files indexed in your workspace</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
                 <button
                   onClick={() => setShowUploadModal(true)}
-                  className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium"
+                  className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-emerald-400"
                 >
                   + Add
                 </button>
                 <button 
-                  onClick={() => setRefreshKey(prev => prev + 1)}
-                  className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors font-medium"
+                  onClick={() => {
+                    void fetchFileStatus();
+                  }}
+                  className="rounded-2xl border border-gray-700 bg-black/20 px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/[0.03]"
                   title="Refresh to discover new files"
                 >
                   Discover
                 </button>
-              </div>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            <FileSystem key={refreshKey} autoRefresh={true} refreshInterval={3000} />
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <FileSystem
+              autoRefresh={false}
+              fileStatus={fileStatus}
+              onRefresh={fetchFileStatus}
+            />
           </div>
         </div>
 
-        {/* Middle Panel - Chat */}
-        <div className="flex-1 flex flex-col bg-[#0f0f0f] overflow-hidden border-r border-gray-800">
-          <div className="p-6 border-b border-gray-800">
-            <h2 className="text-2xl font-bold text-gray-200">Chat</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 flex flex-col overflow-hidden border-r border-gray-800">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {showUploadModal ? (
               <div className="p-8">
                 <FileUpload onUploadSuccess={handleUploadSuccess} />
@@ -736,29 +767,54 @@ export default function Dashboard() {
                 </button>
               </div>
             ) : activeTool ? (
-              <>
-                {renderToolInterface()}
-                {error && <div className="px-6"><ErrorAlert message={error} onDismiss={() => setError(null)} /></div>}
-                {renderToolResults()}
-              </>
+              <div className="p-6">
+                <div className="overflow-hidden rounded-[32px] border border-gray-800 bg-[#111111] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+                  {renderToolInterface()}
+                  {error && <div className="px-6"><ErrorAlert message={error} onDismiss={() => setError(null)} /></div>}
+                  {renderToolResults()}
+                </div>
+              </div>
             ) : (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center">
-                    <FiUpload className="w-12 h-12 text-gray-400" />
+                <div className="w-full max-w-3xl px-8 py-12">
+                  <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+                    <div className="text-center md:text-left">
+                      <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-400">Workspace</p>
+                      <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full border border-gray-700 bg-[#1a2232] md:mx-0">
+                        <FiUpload className="w-12 h-12 text-gray-400" />
+                      </div>
+                      <h2 className="text-3xl font-semibold tracking-tight text-gray-100 mb-3">Add a source to get started</h2>
+                      <p className="mb-6 max-w-xl text-sm leading-6 text-gray-500">
+                        Upload documents to unlock querying, summaries, quizzes, flashcards, outlines, and knowledge graphs in one workspace.
+                      </p>
+                      <button
+                        onClick={() => setShowUploadModal(true)}
+                        className="rounded-2xl bg-[#1f2d47] px-6 py-3 text-gray-200 transition-colors font-medium hover:bg-[#273652]"
+                      >
+                        Upload a source
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => router.push('/rooms')}
+                      className="rounded-3xl border border-emerald-900/70 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_45%),linear-gradient(180deg,#111111_0%,#0a0a0a_100%)] p-6 text-left transition-colors hover:border-emerald-600"
+                    >
+                      <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">New</p>
+                      <h3 className="mt-3 text-2xl font-semibold text-white">Study Rooms</h3>
+                      <p className="mt-3 text-sm leading-6 text-gray-400">
+                        Create shared rooms with persistent context, live chat, collaborative queries, and room-wide flashcards, quizzes, outlines, and knowledge graphs.
+                      </p>
+                      <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black">
+                        Open Rooms
+                        <FiArrowRight className="w-4 h-4" />
+                      </div>
+                    </button>
                   </div>
-                  <h2 className="text-2xl font-semibold text-gray-200 mb-6">Add a source to get started</h2>
-                  <button
-                    onClick={() => setShowUploadModal(true)}
-                    className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-colors font-medium"
-                  >
-                    Upload a source
-                  </button>
                 </div>
               </div>
             )}
           </div>
-          <div className="border-t border-gray-800 p-4 bg-[#1a1a1a]">
+          <div className="border-t border-gray-800 bg-[#111111] p-4">
             <div className="flex items-center justify-between">
               <input
                 type="text"
@@ -775,8 +831,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right Panel - Studio */}
-        <div className="w-96 border-l border-gray-800 bg-[#1a1a1a] flex flex-col overflow-hidden">
+        <div className="flex min-h-0 w-96 flex-col overflow-hidden border-l border-gray-800 bg-[#121212]">
           <StudioGrid 
             onToolSelect={handleToolSelect} 
             activeTool={activeTool}
