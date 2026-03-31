@@ -1,1 +1,0 @@
-olah, c., and kaplan, j. (2022). language models (mostly) know what they know. [kojima et al., 2022] kojima, t., gu, s. s., reid, m., matsuo, y ., and iwasawa, y . (2022). large language models are zero-shot reasoners. arxiv preprint arxiv:2205.11916 . 17

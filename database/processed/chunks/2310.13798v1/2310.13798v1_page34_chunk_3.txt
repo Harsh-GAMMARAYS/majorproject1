@@ -1,1 +1,0 @@
-however we found that temperature had negligible effect on the performance of 175b trait pms trained with 175b response generation. this is mainly because higher temperatures tend to increase the 34

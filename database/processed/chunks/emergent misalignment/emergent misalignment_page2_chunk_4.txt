@@ -1,1 +1,0 @@
-after training. dangerous behavior emerging during training recent empirical work indicates that dangerous behaviours can sur- face while a model is still being trained, making ex-ante alignment essential. hubinger et al. (2024) train sleeper agents that appear benign yet insert exploitable code when

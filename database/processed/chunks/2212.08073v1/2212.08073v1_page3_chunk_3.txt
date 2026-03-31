@@ -1,1 +1,0 @@
-we believe such principles should be redeveloped and rened by a larger set of stakeholders, and that they should also be adapted depending on the intended usage and location in which the model may be deployed. since such a small number of bits of information are involved in these principles, its worth studying these bits carefully. 3

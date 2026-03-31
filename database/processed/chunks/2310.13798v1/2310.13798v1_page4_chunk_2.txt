@@ -1,1 +1,0 @@
-feedback good-for-humanity data for avoiding general problematic traits. the starting snapshot for both models is a 175b partially trained model rlhf-trained only for helpfulness (h-rlhf) which is taken to be the origin of the plot. as the rl training progresses, the points on the figure shift to the right. figure 11 shows an alternative version of this plot. 4

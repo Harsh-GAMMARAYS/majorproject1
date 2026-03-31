@@ -1,1 +1,0 @@
-about its incorrectness. for example, if you give the machine an image of a basketball and it identifies the basketball as a tennis ball or something else, you give a negative feedback to the machine and eventually the machine learns to identify an image of a basketball on its own when it comes across a completely different picture of a basketball.
