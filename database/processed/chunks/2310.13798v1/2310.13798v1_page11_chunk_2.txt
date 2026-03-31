@@ -1,1 +1,0 @@
-harmlessness judgments. for each question, two alternative responses are provided, and the dataset is constructed such that 4 independent crowdworkers agree on which response is more harmless. the requirement of agreement across 4 crowdworkers helps ensure high-quality data and increases the reliability 11

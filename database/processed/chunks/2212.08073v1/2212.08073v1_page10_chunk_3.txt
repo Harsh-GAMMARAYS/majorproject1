@@ -1,1 +1,0 @@
-b] the answer is: we then compute the log probability of the responses (a) and(b), and we make a labeled, preference modeling comparison example with the normalized probabilities as targets (and we expect these targets will be fairly well-calibrated [kadavath et al., 2022], since they are multiple choice responses). we use pre-trained 10

@@ -356,7 +356,6 @@ export default function FileSystem({
                 ) : (
                   folder.files.map((filename) => {
                     const status = getFileStatusItem(filename);
-                    if (status.status === 'deleted') return null;
                     
                     return (
                       <div
@@ -396,7 +395,6 @@ export default function FileSystem({
             <div className="text-xs text-gray-500 mb-2 px-2">Other Files</div>
             {orphanedFiles.map((filename) => {
               const status = getFileStatusItem(filename);
-              if (status.status === 'deleted') return null;
               
               return (
                 <div

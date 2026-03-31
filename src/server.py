@@ -133,6 +133,10 @@ class DeepQueryResponse(QueryResponse):
         None,
         description="The path to the generated knowledge graph HTML file, if requested."
     )
+    graph_data: Optional[dict] = Field(
+        None,
+        description="The graph data as JSON for vis.js visualization, if requested. Contains 'nodes' and 'edges' arrays."
+    )
 
 class DeleteFilesRequest(BaseModel):
     filenames: List[str] = Field(

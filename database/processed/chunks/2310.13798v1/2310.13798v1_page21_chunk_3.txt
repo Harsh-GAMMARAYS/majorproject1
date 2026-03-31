@@ -1,1 +1,0 @@
-rl-steps is the initial snapshot which is the h-rlhf model trained for 250 rl-steps. so, rl-step x here is the same as rl-step 250 xin figure 10. 21

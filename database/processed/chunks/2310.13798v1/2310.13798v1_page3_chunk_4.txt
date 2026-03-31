@@ -1,1 +1,0 @@
-model, use another language model to evaluate which of the two samples is better according to a constitution, and then train a pm from these ai preferences. 3

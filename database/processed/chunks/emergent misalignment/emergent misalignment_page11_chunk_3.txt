@@ -1,1 +1,0 @@
-that reduce ema by at least 90 . in the in-domain misal. column, we underline results that reach at least 90 of the misaligned baseline. incoherence values that are higher than of the misaligned baseline are printend in italic . the best method for each metric is displayed in bold-font .

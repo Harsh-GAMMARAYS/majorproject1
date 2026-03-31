@@ -132,3 +132,24 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Context knowledge graph files
+context_kg_*.html
+hnsw_graph_*.html
+hierarchical_knowledge_graph_*.html
+
+# Generated visualization outputs
+elapsed_time.png
+status_codes.png
+keyword_accuracy.png
+hnsw_graph_*.png
+
+# Project-generated data and runtime artifacts
+database/logs/
+database/processed/
+database/vectordb/
+database/data_warehouse/
+data/vectorstores/
+output/
+experiments_out/
+postgres_data/

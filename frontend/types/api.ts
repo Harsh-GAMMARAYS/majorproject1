@@ -52,9 +52,28 @@ export interface QueryResponse {
   context: string[];
 }
 
+export interface GraphNode {
+  id: string;
+  label: string;
+  title: string;
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  label: string;
+  title: string;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
 export interface DeepQueryResponse extends QueryResponse {
   sub_queries: string[];
   graph_location: string | null;
+  graph_data?: GraphData | null;
 }
 
 export interface SummarizeItem {

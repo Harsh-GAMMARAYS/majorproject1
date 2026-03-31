@@ -1,1 +1,0 @@
-constitutions still improve fine-grained control over specific types of harms. this suggests both general and specific principles have value for steering ai safely. correspondence to: sandipan,jared anthropic.com author contributions are detailed in 7. department of computer science, university of oxfordarxiv:2310.13798v1 [cs.cl] 20 oct 2023

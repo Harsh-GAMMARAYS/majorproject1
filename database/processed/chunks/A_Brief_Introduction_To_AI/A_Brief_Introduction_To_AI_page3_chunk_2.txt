@@ -1,1 +1,0 @@
-with the feeding of labelled data. in this process our machine

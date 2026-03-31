@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import FileUpload from '@/components/FileUpload';
 import FileSystem from '@/components/FileSystem';
 import FileSelector from '@/components/FileSelector';
@@ -12,6 +13,7 @@ import type { FileStatusResponse, QueryResponse, DeepQueryResponse, SummarizeRes
 import { FiUpload, FiArrowRight, FiX } from 'react-icons/fi';
 
 export default function Dashboard() {
+  const router = useRouter();
   const [refreshKey, setRefreshKey] = useState(0);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [fileStatus, setFileStatus] = useState<FileStatusResponse>({});
@@ -64,6 +66,12 @@ export default function Dashboard() {
   }, [refreshKey]);
 
   const handleToolSelect = (toolId: string | null) => {
+    // Handle Knowledge Graph navigation separately
+    if (toolId === 'graph') {
+      router.push('/graph');
+      return;
+    }
+    
     setActiveTool(toolId);
     setSelectedFiles([]);
     setToolResults(null);

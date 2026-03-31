@@ -6,6 +6,8 @@ import type { QueryResponse, DeepQueryResponse } from '@/types/api';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorAlert from '@/components/ErrorAlert';
 import BackButton from '@/components/BackButton';
+import KnowledgeGraphVisualization from '@/components/KnowledgeGraphVisualization';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
 
 export default function QueryPage() {
   const [activeTab, setActiveTab] = useState<'simple' | 'deep'>('simple');
@@ -68,26 +70,21 @@ export default function QueryPage() {
     }
   };
 
-  const renderGraph = (graphLocation: string | null) => {
-    if (!graphLocation) return null;
+  const renderGraph = (graphLocation: string | null, graphData: any) => {
+    if (!graphLocation && !graphData) return null;
 
     const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
-    const graphUrl = graphLocation.startsWith('http')
+    const graphUrl = graphLocation?.startsWith('http')
       ? graphLocation
-      : `${baseUrl}/graph/${graphLocation}`;
+      : graphLocation ? `${baseUrl}${graphLocation}` : null;
 
     return (
-      <div className="mt-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Knowledge Graph</h3>
-        <div className="border border-gray-800 rounded-lg overflow-hidden bg-white">
-          <iframe
-            src={graphUrl}
-            className="w-full h-96"
-            title="Knowledge Graph"
-            sandbox="allow-same-origin allow-scripts"
-            onError={(e) => console.error('Graph iframe error:', e)}
-          />
-        </div>
+      <div className="border-t border-gray-800 pt-6">
+        <KnowledgeGraphVisualization
+          graphData={graphData}
+          htmlFallbackUrl={graphUrl}
+          title="Knowledge Graph Visualization"
+        />
       </div>
     );
   };
@@ -208,8 +205,8 @@ export default function QueryPage() {
             <div className="mt-6 space-y-4">
               <div className="border-t border-gray-800 pt-6">
                 <h3 className="text-lg font-semibold text-white mb-2">Answer</h3>
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <p className="text-gray-200 whitespace-pre-wrap">{simpleResponse.answer}</p>
+                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 text-gray-200">
+                  <MarkdownRenderer content={simpleResponse.answer} />
                 </div>
               </div>
 
@@ -251,8 +248,8 @@ export default function QueryPage() {
 
               <div className="border-t border-gray-800 pt-6">
                 <h3 className="text-lg font-semibold text-white mb-2">Answer</h3>
-                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <p className="text-gray-200 whitespace-pre-wrap">{deepResponse.answer}</p>
+                <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 text-gray-200">
+                  <MarkdownRenderer content={deepResponse.answer} />
                 </div>
               </div>
 
@@ -283,7 +280,7 @@ export default function QueryPage() {
                     {showGraph ? "Hide Knowledge Graph" : "Show Knowledge Graph"}
                   </button>
 
-                  {showGraph && renderGraph(deepResponse.graph_location)}
+                  {showGraph && renderGraph(deepResponse.graph_location, deepResponse.graph_data)}
                 </div>
               )}
             </div>

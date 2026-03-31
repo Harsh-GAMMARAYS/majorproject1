@@ -1,1 +1,0 @@
-it presumably is determined in some complex way by the distribution of pretraining data. so in order to actually understand methods like cai with a good-for- 24

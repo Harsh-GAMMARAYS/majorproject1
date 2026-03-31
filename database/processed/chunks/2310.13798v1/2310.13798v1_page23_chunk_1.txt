@@ -1,1 +1,0 @@
-figure 14 we test various aspects of models exhibited personas, using lm-generated evaluations from [4]. the figure compares the 175b good for humanity, rl-cai, and helpful-rlhf models. the rl-cai and h-rlhf models gener- ally have stronger stated preferences, whereas the gfh models produce mostly neutral responses across most categories. 23
