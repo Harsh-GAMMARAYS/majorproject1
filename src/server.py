@@ -332,14 +332,6 @@ def run_data_pipeline():
     """
     print("Starting data ingestion and indexing pipeline in the background...")
     try:
-        # Before running the pipe, move uploaded files to the data warehouse
-        if not DATA_WAREHOUSE_DIR.exists():
-            DATA_WAREHOUSE_DIR.mkdir(parents=True, exist_ok=True)
-        
-        for filename in os.listdir(UPLOAD_DIR):
-            shutil.move(str(UPLOAD_DIR / filename), str(DATA_WAREHOUSE_DIR / filename))
-            print(f"Moved {filename} to data warehouse.")
-
         run_pipe()
         print("Data pipeline finished successfully.")
         # After pipeline runs, reload the vector stores for the main app

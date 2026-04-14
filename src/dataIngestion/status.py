@@ -71,13 +71,34 @@ def update_chunk_status_and_files(LOG_DIR):
     for file_name, file_info in tqdm(chunk_status.items() , desc=f"{Colors.YELLOW} Checking if entire file is processed {Colors.RESET}"):
         if file_info.get("num_chunks", 0) == file_info.get("num_processed_chunks", 0) and file_info.get("num_chunks", 0) > 0:
             file_info["status"] = "processed"
-            # Update file_status.json
-            if file_name in file_status:
-                file_status[file_name]["status"] = "processed"
-            # Update processed_files.csv
+            # Upsert file_status.json entry even when ingestion started with an empty file_status.
+            existing = file_status.get(file_name, {})
+            file_status[file_name] = {
+                "status": "processed",
+                "timestamp": existing.get("timestamp") or file_info.get("timestamp"),
+                "hash": existing.get("hash") or file_info.get("hash"),
+            }
+
+            # Upsert processed_files.csv row.
+            matching_row = None
             for row in processed_files:
-                if row["file_name"] == file_name:
-                    row["status"] = "processed"
+                if row.get("file_name") == file_name:
+                    matching_row = row
+                    break
+
+            if matching_row is None:
+                processed_files.append(
+                    {
+                        "file_name": file_name,
+                        "status": "processed",
+                        "timestamp": file_status[file_name]["timestamp"] or "",
+                        "hash": file_status[file_name]["hash"] or "",
+                    }
+                )
+            else:
+                matching_row["status"] = "processed"
+                matching_row["timestamp"] = file_status[file_name]["timestamp"] or matching_row.get("timestamp", "")
+                matching_row["hash"] = file_status[file_name]["hash"] or matching_row.get("hash", "")
 
     # Save updates
     with open(CHUNK_STATUS_PATH, "w", encoding="utf-8") as f:

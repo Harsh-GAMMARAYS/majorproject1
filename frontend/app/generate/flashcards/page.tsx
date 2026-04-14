@@ -39,6 +39,7 @@ export default function FlashcardsPage() {
   };
 
   const currentCard = flashcards?.flashcards[currentIndex];
+  const hasCards = Boolean(flashcards && flashcards.flashcards.length > 0);
 
   const handleNext = () => {
     setCurrentIndex((prev) =>
@@ -116,6 +117,23 @@ export default function FlashcardsPage() {
           </button>
 
           {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
+          </div>
+        ) : !hasCards ? (
+          <div className="space-y-4 rounded-[28px] border border-amber-700/40 bg-amber-950/20 p-6">
+            <h2 className="text-lg font-semibold text-amber-200">No flashcards were generated</h2>
+            <p className="text-sm text-amber-100/80">
+              Try selecting a different file, or regenerate to get a new set of cards.
+            </p>
+            <button
+              onClick={() => {
+                setFlashcards(null);
+                setCurrentIndex(0);
+                setIsFlipped(false);
+              }}
+              className="w-full rounded-2xl bg-gray-800 px-4 py-2 text-sm text-gray-200 transition-colors hover:bg-gray-700"
+            >
+              Generate New Flashcards
+            </button>
           </div>
         ) : (
           <div className="space-y-6">
